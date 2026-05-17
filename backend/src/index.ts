@@ -6,6 +6,11 @@ import { config } from './config';
 import { logger } from './logger';
 import { handleConnection } from './wsRouter';
 import sessionRoutes from './routes/sessionRoutes';
+import postRoutes from './routes/postRoutes';
+import followRoutes from './routes/followRoutes';
+import achievementRoutes from './routes/achievementRoutes';
+import pointsRoutes from './routes/pointsRoutes';
+import userRoutes from './routes/userRoutes';
 
 const app = express();
 const server = createServer(app);
@@ -15,12 +20,17 @@ app.use(cors({
   origin: config.nodeEnv === 'production'
     ? ['https://handchat.vercel.app']
     : config.corsOrigin,
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
 }));
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', time: Date.now() }));
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/user', followRoutes);
+app.use('/api/achievements', achievementRoutes);
+app.use('/api/points', pointsRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled API error', { error: err.message, stack: err.stack });

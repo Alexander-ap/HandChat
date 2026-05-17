@@ -8,12 +8,14 @@ generator client {
 }
 
 model Session {
-  id        String        @id @default(uuid())
-  userId    String?
-  status    String        @default("active")
-  startedAt DateTime      @default(now())
-  endedAt   DateTime?
+  id           String        @id @default(uuid())
+  userId       String?
+  status       String        @default("active")
+  startedAt    DateTime      @default(now())
+  endedAt      DateTime?
   translations Translation[]
+
+  @@index([userId])
 }
 
 model Translation {
@@ -28,4 +30,81 @@ model Translation {
   createdAt    DateTime @default(now())
 
   @@index([sessionId, createdAt])
+}
+
+model Post {
+  id        String    @id @default(uuid())
+  title     String
+  content   String
+  authorId  String
+  likes     Int       @default(0)
+  createdAt DateTime  @default(now())
+  comments  Comment[]
+
+  @@index([authorId, createdAt])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  authorId  String
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([postId, createdAt])
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model UserProfile {
+  userId       String   @id
+  nickname     String?
+  avatar       String?
+  bio          String?
+  notification Boolean  @default(true)
+  vibration    Boolean  @default(true)
+  language     String   @default("zh-CN")
+  updatedAt    DateTime @updatedAt
+}
+
+model PointsRecord {
+  id        String   @id @default(uuid())
+  userId    String
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Achievement {
+  id              String             @id @default(uuid())
+  name            String
+  description     String
+  icon            String
+  sortOrder       Int                @default(0)
+  userAchievements UserAchievement[]
+
+  @@index([sortOrder])
+}
+
+model UserAchievement {
+  id            String      @id @default(uuid())
+  userId        String
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+  unlockedAt    DateTime    @default(now())
+  progress      Int         @default(0)
+
+  @@unique([userId, achievementId])
 }
