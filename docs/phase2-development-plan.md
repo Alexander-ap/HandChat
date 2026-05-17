@@ -109,6 +109,8 @@ model Post {
   likes     Int       @default(0)
   createdAt DateTime  @default(now())
   comments  Comment[]
+
+  @@index([authorId, createdAt])
 }
 
 model Comment {
@@ -118,6 +120,18 @@ model Comment {
   postId    String
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+}
+
+// 关注关系表——个人中心"关注"和"粉丝"的数据源
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String                  // 关注者 userId
+  followingId String                  // 被关注者 userId
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])  // 防止重复关注
+  @@index([followerId])
+  @@index([followingId])
 }
 
 model UserProfile {
