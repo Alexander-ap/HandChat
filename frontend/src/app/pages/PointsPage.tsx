@@ -10,11 +10,10 @@ import { Button } from "../components/ui/button";
 import { userApi } from "../lib/api";
 
 interface PointRecord {
-  id: string;
-  title: string;
-  points: number;
-  type: string;
-  date: string;
+  id: string
+  reason: string
+  amount: number
+  createdAt: string
 }
 
 export default function PointsPage() {
@@ -97,11 +96,11 @@ export default function PointsPage() {
                   style={idx < history.length - 1 ? { borderBottom: '0.5px solid rgba(0,0,0,0.06)' } : {}}
                 >
                   <div>
-                    <h3 className="text-[15px] font-medium text-gray-900">{item.title}</h3>
-                    <p className="text-[12px] text-gray-400 mt-0.5">{item.date}</p>
+                    <h3 className="text-[15px] font-medium text-gray-900">{item.reason}</h3>
+                    <p className="text-[12px] text-gray-400 mt-0.5">{formatPointTime(item.createdAt)}</p>
                   </div>
-                  <div className={`text-[16px] font-bold ${item.type === 'earn' ? 'text-orange-500' : 'text-gray-900'}`}>
-                    {item.type === 'earn' ? '+' : ''}{item.points}
+                  <div className={`text-[16px] font-bold ${item.amount > 0 ? 'text-orange-500' : 'text-gray-900'}`}>
+                    {item.amount > 0 ? '+' : ''}{item.amount}
                   </div>
                 </div>
               ))
@@ -111,4 +110,23 @@ export default function PointsPage() {
       </div>
     </div>
   );
+}
+
+function formatPointTime(isoString: string): string {
+  if (!isoString) return ''
+  const now = Date.now()
+  const then = new Date(isoString).getTime()
+  const diff = now - then
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins}分钟前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) {
+    const d = new Date(isoString)
+    return `今天 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+  const days = Math.floor(hours / 24)
+  if (days < 2) return '昨天'
+  if (days < 7) return `${days}天前`
+  return new Date(isoString).toLocaleDateString()
 }

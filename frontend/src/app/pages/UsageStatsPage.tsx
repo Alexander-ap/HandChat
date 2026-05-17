@@ -71,26 +71,8 @@ export default function UsageStatsPage() {
         {/* 使用时长概览 */}
         <div className="bg-white rounded-[14px] p-4 shadow-sm">
           <h3 className="text-[15px] font-bold text-gray-900 mb-3">近7天使用时长</h3>
-          <div className="flex items-end justify-between h-36 gap-1.5">
-            {stats.totalTranslations > 0 || stats.totalSoundDetections > 0 ? (
-              Array.from({ length: 7 }).map((_, i) => {
-                const heights = [30, 45, 20, 60, 40, 70, 45]
-                const height = heights[i]
-                return (
-                  <div key={i} className="flex flex-col items-center flex-1 gap-1.5">
-                    <div 
-                      className="w-full bg-blue-500/80 rounded-t-md transition-all" 
-                      style={{ height: `${height}%` }}
-                    />
-                    <span className="text-[10px] text-gray-400">{['一','二','三','四','五','六','日'][i]}</span>
-                  </div>
-                )
-              })
-            ) : (
-              <div className="w-full py-8 text-center text-gray-400 text-[14px]">
-                暂无使用数据，快去体验功能吧
-              </div>
-            )}
+          <div className="flex items-center justify-center py-10">
+            <p className="text-[14px] text-gray-400">详细数据即将上线</p>
           </div>
         </div>
 

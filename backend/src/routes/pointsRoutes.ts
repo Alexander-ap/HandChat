@@ -26,10 +26,9 @@ router.get('/history', async (req, res, next) => {
     res.json({
       records: history.map((r) => ({
         id: r.id,
-        title: r.reason,
-        points: r.amount,
-        type: 'earn',
-        date: r.createdAt.toISOString(),
+        amount: r.amount,
+        reason: r.reason,
+        createdAt: r.createdAt.toISOString(),
       })),
       total,
       limit,
