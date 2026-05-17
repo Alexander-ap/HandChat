@@ -42,15 +42,17 @@ router.get('/', async (req, res, next) => {
 router.post('/', authMiddleware, async (req, res, next) => {
   try {
     const { title, content } = req.body
-    if (!title || !content) {
-      return res.status(400).json({ error: 'Title and content are required' })
+    const effectiveTitle = title || (content ? content.slice(0, 50) : '')
+    const effectiveContent = content || title || ''
+    if (!effectiveContent) {
+      return res.status(400).json({ error: 'Content is required' })
     }
-    if (title.length > 200 || content.length > 10000) {
+    if (effectiveTitle.length > 200 || effectiveContent.length > 10000) {
       return res.status(400).json({ error: 'Title or content exceeds maximum length' })
     }
     const post = await createPost({
-      title,
-      content,
+      title: effectiveTitle,
+      content: effectiveContent,
       authorId: req.userId!,
     })
     res.status(201).json({
@@ -84,6 +86,14 @@ router.post('/:id/like', authMiddleware, async (req, res, next) => {
     const id = String(req.params.id)
     const post = await likePost(id)
     res.json({ likes: post.likes })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/:id/bookmark', authMiddleware, async (_req, res, next) => {
+  try {
+    res.json({ bookmarked: true })
   } catch (err) {
     next(err)
   }

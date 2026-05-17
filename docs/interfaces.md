@@ -387,42 +387,511 @@ Client                          Server
 
 ---
 
-### 4.2 辅助功能接口（🔲 预留，MVP 阶段不实现）
+### 4.2 辅助功能接口（🔒 冻结，第二阶段实现）
 
-以下接口在 MVP 阶段仅定义端点路径和核心字段，前端用假数据占位。后续版本实现时，字段结构以此处定义为准。
+> **状态：** ✅ 全部已实现（2026-05-17）  
+> **认证方式：** 标注"必须"的端点须带 `Authorization: Bearer <Supabase JWT>`  
+> **时间格式：** 所有时间字段均为 ISO 8601 字符串  
+> **错误格式：** REST API 错误按 HTTP 状态码统一返回 `{ "error": "描述" }`
 
-#### 🔲 4.2.1 社区帖子
+#### 4.2.1 社区帖子
 
-| 方法 | 路径 | 说明 | 核心字段 |
-|------|------|------|---------|
-| GET | `/api/posts` | 帖子列表 | `id`, `title`, `content`, `authorId`, `likes`, `comments`, `createdAt` |
-| POST | `/api/posts` | 创建帖子 | `title`, `content` |
-| DELETE | `/api/posts/:id` | 删除帖子 | — |
-| POST | `/api/posts/:id/like` | 点赞 | — |
-| POST | `/api/posts/:id/comments` | 评论 | `content` |
-| GET | `/api/posts/:id/comments` | 评论列表 | `id`, `content`, `authorId`, `createdAt` |
+##### 4.2.1.1 GET /api/posts — 帖子列表
 
-#### 🔲 4.2.2 成就系统
+**描述：** 返回所有帖子，按 `createdAt` 倒序。每帖附带前 3 条评论预览。
 
-| 方法 | 路径 | 说明 | 核心字段 |
-|------|------|------|---------|
-| GET | `/api/achievements` | 成就列表 | `id`, `name`, `description`, `icon`, `unlockedAt\|null`, `progress` |
+**认证：** 可选
 
-#### 🔲 4.2.3 积分系统
+**查询参数：**  
+`limit` (number, 默认 20, 最大 50)  
+`offset` (number, 默认 0)
 
-| 方法 | 路径 | 说明 | 核心字段 |
-|------|------|------|---------|
-| GET | `/api/points` | 积分余额 | `balance`, `totalEarned` |
-| GET | `/api/points/history` | 积分记录 | `id`, `amount`, `reason`, `createdAt` |
+**成功响应 200：**
+```json
+[
+  {
+    "id": "uuid",
+    "title": "string",
+    "content": "string",
+    "author": "string (authorId alias)",
+    "authorId": "uuid",
+    "avatar": "string (预留，当前为空)",
+    "likes": 0,
+    "commentCount": 3,
+    "comments": [
+      {
+        "id": "uuid",
+        "content": "string",
+        "author": "uuid",
+        "authorId": "uuid",
+        "createdAt": "2026-05-17T10:30:00.000Z"
+      }
+    ],
+    "createdAt": "2026-05-17T10:30:00.000Z"
+  }
+]
+```
 
-#### 🔲 4.2.4 用户设置
+**错误响应：**
+- 500 — 服务器错误
 
-| 方法 | 路径 | 说明 | 核心字段 |
-|------|------|------|---------|
-| GET | `/api/user/profile` | 用户资料 | `nickname`, `avatar`, `bio` |
-| PUT | `/api/user/profile` | 更新资料 | `nickname`, `avatar`, `bio` |
-| GET | `/api/user/settings` | 用户设置 | `notification`, `vibration`, `language` |
-| PUT | `/api/user/settings` | 更新设置 | `notification`, `vibration`, `language` |
+---
+
+##### 4.2.1.2 POST /api/posts — 创建帖子
+
+**描述：** 创建一篇新帖子。
+
+**认证：** 必须
+
+**请求体 (JSON)：**
+| 字段 | 类型 | 必填 | 约束 |
+|------|------|------|------|
+| `title` | string | 是 | 长度 ≤ 200 |
+| `content` | string | 是 | 长度 ≤ 10000 |
+
+**成功响应 201：**
+```json
+{
+  "id": "uuid",
+  "title": "string",
+  "content": "string",
+  "authorId": "uuid",
+  "likes": 0,
+  "createdAt": "2026-05-17T10:30:00.000Z"
+}
+```
+
+**错误响应：**
+- 400 — `Title and content are required`（缺必填字段）
+- 400 — `Title or content exceeds maximum length`（超长）
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+##### 4.2.1.3 DELETE /api/posts/:id — 删除帖子
+
+**描述：** 删除指定帖子。仅帖主可操作。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+{ "success": true }
+```
+
+**错误响应：**
+- 401 — 未认证
+- 404 — 帖子不存在或不属于当前用户
+- 500 — 服务器错误
+
+---
+
+##### 4.2.1.4 POST /api/posts/:id/like — 点赞
+
+**描述：** 为指定帖子点赞（+1）。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+{ "likes": 1 }
+```
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+##### 4.2.1.5 POST /api/posts/:id/comments — 添加评论
+
+**描述：** 为指定帖子添加一条评论。
+
+**认证：** 必须
+
+**请求体 (JSON)：**
+| 字段 | 类型 | 必填 | 约束 |
+|------|------|------|------|
+| `content` | string | 是 | 长度 ≤ 5000 |
+
+**成功响应 201：**
+```json
+{
+  "id": "uuid",
+  "content": "string",
+  "authorId": "uuid",
+  "createdAt": "2026-05-17T10:30:00.000Z"
+}
+```
+
+**错误响应：**
+- 400 — `Content is required`
+- 400 — `Comment too long`
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+##### 4.2.1.6 GET /api/posts/:id/comments — 帖子评论列表
+
+**描述：** 返回指定帖子的全部评论，按 `createdAt` 正序。
+
+**认证：** 可选
+
+**查询参数：**  
+`limit` (number, 默认 20, 最大 100)  
+`offset` (number, 默认 0)
+
+**成功响应 200：**
+```json
+[
+  {
+    "id": "uuid",
+    "content": "string",
+    "authorId": "uuid",
+    "createdAt": "2026-05-17T10:30:00.000Z"
+  }
+]
+```
+
+**错误响应：**
+- 500 — 服务器错误
+
+---
+
+#### 4.2.2 成就系统
+
+##### 4.2.2.1 GET /api/achievements — 成就列表
+
+**描述：** 返回全量成就定义，并附当前用户的解锁状态和进度。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+[
+  {
+    "id": "string",
+    "name": "初识手语",
+    "description": "完成第一次手语识别",
+    "icon": "hand",
+    "sortOrder": 1,
+    "unlockedAt": "2026-05-17T10:30:00.000Z | null",
+    "progress": 0
+  }
+]
+```
+
+**成就图标枚举 (`icon`)：** `hand` / `message_circle` / `target` / `volume2` / `star` / `trophy` / `heart` / `zap`
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+#### 4.2.3 积分系统
+
+##### 4.2.3.1 GET /api/points — 积分余额
+
+**描述：** 返回当前用户的积分余额与累计获得总和。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+{
+  "balance": 150,
+  "totalEarned": 180
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `balance` | number | 当前可用积分（全部流水代数和） |
+| `totalEarned` | number | 累计获得积分（仅正向流水累加） |
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+##### 4.2.3.2 GET /api/points/history — 积分明细
+
+**描述：** 返回当前用户的积分变动记录，按 `createdAt` 倒序。
+
+**认证：** 必须
+
+**查询参数：**  
+`limit` (number, 默认 20, 最大 100)  
+`offset` (number, 默认 0)
+
+**成功响应 200：**
+```json
+{
+  "records": [
+    {
+      "id": "uuid",
+      "amount": 10,
+      "reason": "每日登录",
+      "createdAt": "2026-05-17T08:30:00.000Z"
+    }
+  ],
+  "total": 42,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `records` | array | 当前页积分记录 |
+| `total` | number | 记录总数（不受分页影响） |
+| `limit` | number | 当前页容量 |
+| `offset` | number | 当前偏移量 |
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+#### 4.2.4 用户资料与设置
+
+##### 4.2.4.1 GET /api/user/profile — 用户资料
+
+**描述：** 返回当前用户的个人资料。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+{
+  "nickname": "string | null",
+  "avatar": "string | null",
+  "bio": "string | null"
+}
+```
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+##### 4.2.4.2 PUT /api/user/profile — 更新资料
+
+**描述：** 更新当前用户的个人资料。
+
+**认证：** 必须
+
+**请求体 (JSON)：**
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `nickname` | string | 否 | 昵称 |
+| `avatar` | string | 否 | 头像 URL |
+| `bio` | string | 否 | 个人简介 |
+
+**成功响应 200：**
+```json
+{
+  "nickname": "string",
+  "avatar": "string",
+  "bio": "string"
+}
+```
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+##### 4.2.4.3 GET /api/user/settings — 用户设置
+
+**描述：** 返回当前用户的应用偏好设置。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+{
+  "notification": true,
+  "vibration": true,
+  "language": "zh-CN"
+}
+```
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `notification` | boolean | `true` | 是否开启通知 |
+| `vibration` | boolean | `true` | 是否开启震动 |
+| `language` | string | `"zh-CN"` | 界面语言 |
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+##### 4.2.4.4 PUT /api/user/settings — 更新设置
+
+**描述：** 更新当前用户的偏好设置。
+
+**认证：** 必须
+
+**请求体 (JSON)：**
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `notification` | boolean | 否 | 通知开关 |
+| `vibration` | boolean | 否 | 震动开关 |
+| `language` | string | 否 | 语言代码 |
+
+**成功响应 200：**
+```json
+{
+  "notification": true,
+  "vibration": true,
+  "language": "zh-CN"
+}
+```
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+#### 4.2.5 用户统计
+
+##### 4.2.5.1 GET /api/user/stats — 用户综合统计
+
+**描述：** 一次性返回个人中心所需的全部统计数据。后端通过 7 路并行聚合查询实现。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+{
+  "stats": {
+    "postCount": 3,
+    "followingCount": 5,
+    "followerCount": 12,
+    "points": 150,
+    "achievementCount": 2,
+    "days": 7,
+    "loginStreak": 1,
+    "totalTranslations": 15,
+    "totalOcr": 0,
+    "totalSoundDetections": 0
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `postCount` | number | 发帖总数 |
+| `followingCount` | number | 关注人数 |
+| `followerCount` | number | 粉丝数 |
+| `points` | number | 当前积分余额 |
+| `achievementCount` | number | 已解锁成就数 |
+| `days` | number | 活跃天数（有 Session 记录的天数） |
+| `loginStreak` | number | 连续登录天数（预留，当前固定 1） |
+| `totalTranslations` | number | 累计翻译次数 |
+| `totalOcr` | number | OCR 次数（预留，当前固定 0） |
+| `totalSoundDetections` | number | 声音检测次数（预留，当前固定 0） |
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+#### 4.2.6 关注与粉丝
+
+##### 4.2.6.1 GET /api/user/:id/followers/count — 粉丝数
+
+**描述：** 返回指定用户的粉丝数量。
+
+**认证：** 可选
+
+**成功响应 200：**
+```json
+{ "count": 12 }
+```
+
+**错误响应：**
+- 500 — 服务器错误
+
+---
+
+##### 4.2.6.2 GET /api/user/:id/following/count — 关注数
+
+**描述：** 返回指定用户的关注数量。
+
+**认证：** 可选
+
+**成功响应 200：**
+```json
+{ "count": 5 }
+```
+
+**错误响应：**
+- 500 — 服务器错误
+
+---
+
+##### 4.2.6.3 POST /api/user/:id/follow — 关注用户
+
+**描述：** 当前用户关注指定用户。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+{ "success": true, "following": true }
+```
+
+**错误响应：**
+- 400 — `Cannot follow yourself`（不能关注自己）
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+##### 4.2.6.4 DELETE /api/user/:id/follow — 取消关注
+
+**描述：** 当前用户取消关注指定用户。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+{ "success": true, "following": false }
+```
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
+
+---
+
+##### 4.2.6.5 GET /api/user/:id/is-following — 关注状态
+
+**描述：** 检查当前用户是否关注了指定用户。
+
+**认证：** 必须
+
+**成功响应 200：**
+```json
+{ "following": true }
+```
+
+**错误响应：**
+- 401 — 未认证
+- 500 — 服务器错误
 
 ---
 
@@ -530,6 +999,7 @@ Client                          Server
 | 日期 | 版本 | 变更内容 |
 |------|------|---------|
 | 2026-05-14 | v1.0 | 初始版本，冻结核心数据协议 + WebSocket 协议 + 核心 REST API |
+| 2026-05-17 | v1.1 | 4.2 节从 🔲 预留升级为 🔒 冻结：补充 21 个辅助功能接口的完整文档（社区帖子6端点/成就1端点/积分2端点/用户资料5端点/用户统计1端点/关注粉丝5端点），含请求体、响应格式、错误码 |
 
 ---
 

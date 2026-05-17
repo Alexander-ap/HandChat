@@ -167,8 +167,15 @@ export default function CommunityPage() {
     if (!newComment.trim() || !selectedPostId) return;
     try {
       const data = await postsApi.addComment(selectedPostId, newComment.trim());
-      if (data.success && data.comment) {
-        setComments(prev => [data.comment, ...prev]);
+      if (data.id) {
+        const comment = {
+          id: data.id,
+          author: { name: '我', avatar: '' },
+          content: data.content,
+          likes: 0,
+          timeAgo: '刚刚',
+        }
+        setComments(prev => [comment, ...prev])
         // 更新帖子评论数
         setPosts(prev => prev.map(p =>
           p.id === selectedPostId ? { ...p, comments: p.comments + 1 } : p
@@ -240,14 +247,24 @@ export default function CommunityPage() {
           images: newPostImages.length > 0 ? newPostImages : undefined,
         });
         
-        if (data.success && data.post) {
-          setPosts(prev => [data.post, ...prev]);
-          setNewPostContent("");
-          setNewPostImages([]);
-          setShowNewPost(false);
-          toast.success("发布成功");
-          try { await userApi.recordAction('post'); } catch (e) { /* ignore */ }
-          return;
+        if (data.id) {
+          setPosts(prev => [{
+            id: data.id,
+            author: { name: userName, avatar: userAvatar, verified: false },
+            content: data.content,
+            likes: data.likes || 0,
+            comments: 0,
+            shares: 0,
+            isLiked: false,
+            isBookmarked: false,
+            timeAgo: '刚刚',
+          }, ...prev])
+          setNewPostContent("")
+          setNewPostImages([])
+          setShowNewPost(false)
+          toast.success("发布成功")
+          try { await userApi.recordAction('post') } catch (e) { /* ignore */ }
+          return
         }
       } catch (serverErr: any) {
         if (serverErr.message.includes("登录") || serverErr.message.includes("认证")) {

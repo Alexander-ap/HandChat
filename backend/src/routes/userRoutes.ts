@@ -21,11 +21,17 @@ router.get('/profile', authMiddleware, async (req, res, next) => {
 
 router.put('/profile', authMiddleware, async (req, res, next) => {
   try {
-    const { nickname, avatar, bio } = req.body
-    const profile = await updateProfile(req.userId!, { nickname, avatar, bio })
+    const { nickname, avatar, bio, name, avatar_url } = req.body
+    const effectiveNickname = nickname || name
+    const effectiveAvatar = avatar || avatar_url
+    const profile = await updateProfile(req.userId!, {
+      nickname: effectiveNickname,
+      avatar: effectiveAvatar,
+      bio,
+    })
     res.json({
-      nickname: profile.nickname,
-      avatar: profile.avatar,
+      nickname: effectiveNickname || profile.nickname,
+      avatar: effectiveAvatar || profile.avatar,
       bio: profile.bio,
     })
   } catch (err) {
