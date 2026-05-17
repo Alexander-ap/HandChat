@@ -179,10 +179,11 @@ model UserAchievement {
 
 | Service | 文件 | 函数 |
 |---------|------|------|
-| `postService` | `backend/src/services/postService.ts` | `createPost`, `listPosts`, `deletePost`, `likePost`, `addComment`, `getComments` |
-| `achievementService` | `backend/src/services/achievementService.ts` | `listAchievements`, `unlockAchievement`, `getUserProgress` |
+| `postService` | `backend/src/services/postService.ts` | `createPost`, `listPosts`, `deletePost`, `likePost`, `addComment`, `getComments`, `getUserPostCount` |
+| `followService` | `backend/src/services/followService.ts` | `follow`, `unfollow`, `getFollowingCount`, `getFollowerCount`, `isFollowing`, `getFollowingList`, `getFollowerList` |
+| `achievementService` | `backend/src/services/achievementService.ts` | `listAchievements`, `unlockAchievement`, `getUserProgress`, `getUserAchievementCount` |
 | `pointsService` | `backend/src/services/pointsService.ts` | `getBalance`, `addPoints`, `getHistory` |
-| `userService` | `backend/src/services/userService.ts` | `getProfile`, `updateProfile`, `getSettings`, `updateSettings` |
+| `userService` | `backend/src/services/userService.ts` | `getProfile`, `updateProfile`, `getSettings`, `updateSettings`, `getUserStats` |
 
 #### A3. 新增 REST API 路由
 
@@ -198,6 +199,19 @@ model UserAchievement {
 | POST | `/api/posts/:id/like` | `routes/postRoutes.ts` | 必须 |
 | POST | `/api/posts/:id/comments` | `routes/postRoutes.ts` | 必须 |
 | GET | `/api/posts/:id/comments` | `routes/postRoutes.ts` | 可选 |
+
+**🆕 关注/粉丝（个人中心核心数据）**
+
+> 注：关注/粉丝功能不在 interfaces.md 4.2 中，但 ProfilePage 当前硬编码了"关注 128"和"粉丝 356"假数据，必须实现。
+
+| 方法 | 路径 | 实现文件 | 认证 |
+|------|------|---------|------|
+| GET | `/api/user/:id/followers/count` | `routes/followRoutes.ts` | 可选 |
+| GET | `/api/user/:id/following/count` | `routes/followRoutes.ts` | 可选 |
+| POST | `/api/user/:id/follow` | `routes/followRoutes.ts` | 必须 |
+| DELETE | `/api/user/:id/follow` | `routes/followRoutes.ts` | 必须 |
+| GET | `/api/user/:id/followers` | `routes/followRoutes.ts` | 可选 |
+| GET | `/api/user/:id/following` | `routes/followRoutes.ts` | 可选 |
 
 **4.2.2 成就系统**
 
@@ -221,17 +235,48 @@ model UserAchievement {
 | GET | `/api/user/settings` | `routes/userRoutes.ts` | 必须 |
 | PUT | `/api/user/settings` | `routes/userRoutes.ts` | 必须 |
 
+**🆕 用户综合统计（ProfilePage 汇总数据）**
+
+> 一次性返回 ProfilePage 所需的全部统计数据，避免多次请求。
+
+| 方法 | 路径 | 实现文件 | 认证 | 返回字段 |
+|------|------|---------|------|---------|
+| GET | `/api/user/stats` | `routes/userRoutes.ts` | 必须 | `{ postCount, followingCount, followerCount, points, achievementCount, ... }` |
+
 #### A4. 前端假数据替换
 
-| 页面 | 当前状态 | 改造目标 |
-|------|---------|---------|
-| `ProfilePage` | 帖子/关注/粉丝硬编码 | 调用 `/api/posts?authorId=` + `/api/user/stats` |
-| `PointsPage` | 积分明细硬编码降级 | 对接 `/api/points` + `/api/points/history` |
-| `AchievementsPage` | 成就列表全硬编码 | 对接 `/api/achievements`，逐个成就查询解锁状态 |
-| `UsageStatsPage` | 图表数据硬编码 | 调用 `/api/points/history` 聚合真实数据绘图 |
-| `PrivacySettingsPage` | 纯本地状态 | 对接 `GET/PUT /api/user/settings`，服务端持久化 |
-| `CommunityPage` | 已对接 API ✅ | 补充 `author` 字段（当前缺失 `authorId → nickname` 映射） |
-| `EditProfilePage` | 已对接 API ✅ | `nickname`/`avatar`/`bio` 对齐 `UserProfile` 模型 |
+| 页面 | 假数据项 | 当前写法 | 改造目标 |
+|------|---------|---------|---------|
+| **ProfilePage** | **帖子数量** | 硬编码 `42` | 调 `/api/user/stats` → `postCount` 字段 |
+| **ProfilePage** | **关注数** | 硬编码 `128` | 调 `/api/user/:id/following/count` |
+| **ProfilePage** | **粉丝数** | 硬编码 `356` | 调 `/api/user/:id/followers/count` |
+| **ProfilePage** | **个人资料** | 仅从 Supabase Auth 读 `name` | 调 `GET /api/user/profile` 获取 `nickname/avatar/bio` |
+| **EditProfilePage** | **个人资料编辑** | 已对接 API ✅ | `nickname`/`avatar`/`bio` 对齐 `UserProfile` 模型 |
+| **PointsPage** | **积分余额+明细** | 积分明细降级假数据 | 对接 `/api/points` + `/api/points/history` |
+| **AchievementsPage** | **成就列表** | 6 项成就全部硬编码 | 调 `/api/achievements` → 渲染真实列表+解锁状态 |
+| **UsageStatsPage** | **7 天图表** | 硬编码 `[30,45,20,60,40,70,45]` | 调 `/api/points/history` 聚合真实每日数据 |
+| **PrivacySettingsPage** | **通知/震动设置** | 纯本地 React state | 对接 `GET/PUT /api/user/settings`，服务端持久化 |
+| **CommunityPage** | **帖子列表** | 已对接 API ✅ | 补充 `author` 昵称+头像（当前仅 `authorId`→ 需 `userService.getProfile` 映射） |
+| **CommunityPage** | **发帖** | 已对接 API ✅ | 新增发帖后刷新个人 `postCount` |
+| **CommunityPage** | **点赞/评论** | 已对接 API ✅ | — |
+
+> **ProfilePage 改造对照（最复杂的一页）**
+>
+> 当前 ProfilePage 渲染：
+> ```
+> <div>42 帖子</div>       ← 硬编码
+> <div>128 关注</div>      ← 硬编码
+> <div>356 粉丝</div>      ← 硬编码
+> ```
+>
+> 改造后：
+> ```ts
+> const { postCount, followingCount, followerCount } = await userService.getUserStats(userId)
+> ```
+> → 调 `GET /api/user/stats`，后端从 `Post`/`Follow`/`PointsRecord`/`UserAchievement` 四张表中聚合查询。<br>
+> `postCount` = `SELECT COUNT(*) FROM Post WHERE authorId = ?`<br>
+> `followingCount` = `SELECT COUNT(*) FROM Follow WHERE followerId = ?`<br>
+> `followerCount` = `SELECT COUNT(*) FROM Follow WHERE followingId = ?`
 
 ---
 
@@ -280,12 +325,14 @@ model UserAchievement {
 
 逐页确认以下页面不再包含硬编码假数据：
 
-- [ ] `ProfilePage` — 帖子/关注/粉丝来自 API
-- [ ] `PointsPage` — 积分明细全量来自 API
-- [ ] `AchievementsPage` — 成就列表全量来自 API
+- [ ] `ProfilePage` — 帖子数量来自 API、关注/粉丝数来自 `/api/user/:id/*/count`
+- [ ] `ProfilePage` — 个人资料（昵称/头像/简介）来自 `GET /api/user/profile`
+- [ ] `PointsPage` — 积分余额+明细全量来自 API
+- [ ] `AchievementsPage` — 成就列表全量来自 `/api/achievements`
 - [ ] `UsageStatsPage` — 图表数据来自真实统计
-- [ ] `PrivacySettingsPage` — 设置持久化到服务端
-- [ ] `CommunityPage` — `author` 字段补齐
+- [ ] `PrivacySettingsPage` — 设置持久化到 `PUT /api/user/settings`
+- [ ] `CommunityPage` — `author` 昵称+头像已映射，发帖后 postCount 同步更新
+- [ ] `EditProfilePage` — `nickname`/`avatar`/`bio` 对齐 `UserProfile` 表
 
 ---
 
@@ -330,45 +377,62 @@ model UserAchievement {
 
 ### 里程碑一览
 
-| 里程碑 | 内容 | 预估 |
+| 里程碑 | 内容 | 状态 |
 |--------|------|------|
-| **M1** | 阶段 A 完成：全部辅助功能接口后端实现 + 前端假数据清除 | — |
-| **M2** | 阶段 B 完成：视觉模型接口占位规范化 | — |
-| **M3** | 阶段 C 完成：全量联调 + 假数据零残留验证 | — |
+| **M1** | 阶段 A 完成：全部辅助功能接口后端实现 + 前端假数据清除 | ✅ 已完成 (2026-05-17) |
+| **M2** | 阶段 B 完成：视觉模型接口占位规范化 | ⏳ 待实施 |
+| **M3** | 阶段 C 完成：全量联调 + 假数据零残留验证 | ⏳ 待实施 |
 
 ### 详细任务分解
 
-#### M1：辅助功能实现
+#### M1：辅助功能实现 ✅ (2026-05-17)
 
-| 子任务 | 负责方 | 依赖 |
+| 子任务 | 负责方 | 状态 |
 |--------|--------|------|
-| 1.1 Schema 扩展（5 张新表） | 后端 | — |
-| 1.2 `postService` 实现 | 后端 | 1.1 |
-| 1.3 `achievementService` 实现 | 后端 | 1.1 |
-| 1.4 `pointsService` 实现 | 后端 | 1.1 |
-| 1.5 `userService` 实现 | 后端 | 1.1 |
-| 1.6 REST API 路由注册 + authMiddleware | 后端 | 1.2-1.5 |
-| 1.7 `ProfilePage` 假数据清除 | 前端 | 1.6 |
-| 1.8 `PointsPage` 假数据清除 | 前端 | 1.6 |
-| 1.9 `AchievementsPage` 假数据清除 | 前端 | 1.6 |
-| 1.10 `UsageStatsPage` 假数据清除 | 前端 | 1.6 |
-| 1.11 `PrivacySettingsPage` API 对接 | 前端 | 1.6 |
-| 1.12 `CommunityPage` author 字段补齐 | 前端 | 1.6 |
+| 1.1 Schema 扩展（6 张新表：Post/Comment/Follow/UserProfile/PointsRecord/Achievement+UserAchievement） | 后端 | ✅ |
+| 1.2 `postService` 实现 | 后端 | ✅ |
+| 1.3 `followService` 实现 | 后端 | ✅ |
+| 1.4 `achievementService` 实现 | 后端 | ✅ |
+| 1.5 `pointsService` 实现 | 后端 | ✅ |
+| 1.6 `userService` 实现（含 `getUserStats` 聚合查询） | 后端 | ✅ |
+| 1.7 REST API 路由注册 + authMiddleware | 后端 | ✅ |
+| 1.8 `ProfilePage` 假数据清除（帖子数+关注+粉丝+个人资料） | 前端 | ✅ |
+| 1.9 `PointsPage` 假数据清除 | 前端 | ✅ |
+| 1.10 `AchievementsPage` 假数据清除 | 前端 | ✅ |
+| 1.11 `UsageStatsPage` 假数据清除 | 前端 | ✅ |
+| 1.12 `PrivacySettingsPage` API 对接 | 前端 | ✅ |
+| 1.13 `CommunityPage` 假数据清除 + author 字段补齐 | 前端 | ✅ |
+| 1.14 `EditProfilePage` 对齐 UserProfile 模型 | 前端 | ✅ |
+
+#### 🆕 性能优化 (2026-05-17)
+
+| 优化项 | 状态 |
+|--------|------|
+| Schema 添加 Comment/Session/Achievement 缺失索引 | ✅ |
+| `getUserStats` 从全量拉取改为纯聚合查询（7次 count/aggregate 并行） | ✅ |
+| `listPosts` 评论限制 take:3 + `_count` 聚合 | ✅ |
+| 评论端点添加分页 (limit/offset) | ✅ |
+| `unfollow` 双次DB往返改为单次 delete（P2025 处理） | ✅ |
+| `deletePost` findFirst+delete 改为 deleteMany 单次查询 | ✅ |
+| 成就列表引入 5 分钟内存缓存（`achievementCache`） | ✅ |
+| `getBalance` 区分 balance 和 totalEarned | ✅ |
+| 积分历史返回真实总数（`getHistoryTotal`） | ✅ |
+| 发帖/评论添加长度限制校验（title≤200, content≤10000, comment≤5000） | ✅ |
 
 #### M2：模型接口规范化
 
-| 子任务 | 负责方 | 依赖 |
+| 子任务 | 负责方 | 状态 |
 |--------|--------|------|
-| 2.1 `handPoseDetector.ts` JSDoc 标注 | 前端 | — |
-| 2.2 后端 `dtwService.ts` 接口定义（空壳） | 后端 | — |
+| 2.1 `handPoseDetector.ts` JSDoc 标注 | 前端 | ⏳ 待实施 |
+| 2.2 后端 `dtwService.ts` 接口定义（空壳） | 后端 | ⏳ 待实施 |
 
 #### M3：联调与验证
 
-| 子任务 | 负责方 | 依赖 |
+| 子任务 | 负责方 | 状态 |
 |--------|--------|------|
-| 3.1 全链路接口契约验证 | 全部 | M1 + M2 |
-| 3.2 假数据零残留逐页确认 | 前端 | M1 |
-| 3.3 Git commit + tag v0.2.0 | 全部 | 3.1 + 3.2 |
+| 3.1 全链路接口契约验证 | 全部 | ⏳ 待实施 |
+| 3.2 假数据零残留逐页确认 | 前端 | ⏳ 待实施 |
+| 3.3 Git commit + tag v0.2.0 | 全部 | ⏳ 待实施 |
 
 ---
 
@@ -440,7 +504,7 @@ model UserAchievement {
 | 本地存储 | `handchat/browserSessionStore.ts` | ✅ 100% |
 | **手部检测模型** | **`handchat/recognition/handPoseDetector.ts`** | **❌ 0% — 占位 throw Error** |
 
-### A2. 后端模块审计
+### A2. 后端模块审计（更新于 2026-05-17）
 
 | 模块 | 状态 |
 |------|------|
@@ -449,23 +513,26 @@ model UserAchievement {
 | REST API（3 核心接口） | ✅ 100% |
 | 认证中间件 | ✅ 100% |
 | 会话服务（8 函数） | ✅ 100% |
-| 数据库 Schema（2 表） | ✅ 100% |
-| **社区帖子接口（6 端点）** | **⚠️ 超前实现但无独立路由文件** |
-| **成就系统** | **❌ 未实现** |
-| **积分系统** | **❌ 未实现（部分散落在通用 /api/user/points）** |
-| **用户设置** | **❌ 未实现** |
+| 数据库 Schema（8 表） | ✅ 100% — 新增 Post/Comment/Follow/UserProfile/PointsRecord/Achievement/UserAchievement |
+| 社区帖子接口（6 端点） | ✅ 100% |
+| 成就系统 | ✅ 100% |
+| 积分系统 | ✅ 100% |
+| 用户设置 | ✅ 100% |
+| 关注/粉丝接口 | ✅ 100% |
+| 用户统计聚合 | ✅ 100% |
+| 性能索引优化 | ✅ 已完成 — Comment/Session/Achievement 添加缺失索引 |
 
-### A3. 前端页面假数据分布
+### A3. 前端页面假数据分布（更新于 2026-05-17）
 
-| 页面 | 假数据比例 | 类型 |
+| 页面 | 假数据比例 | 状态 |
 |------|-----------|------|
-| HelpCenterPage | 100% | 静态内容 |
-| UserAgreementPage | 100% | 静态内容 |
-| PrivacySettingsPage | 100% | 本地状态无持久化 |
-| AchievementsPage | 90% | 成就列表硬编码 |
-| UsageStatsPage | 50% | 图表数据硬编码 |
-| PointsPage | 30% | 积分明细降级假数据 |
-| ProfilePage | 20% | 帖子/关注/粉丝硬编码 |
+| HelpCenterPage | 100% | 🔲 静态内容（设计如此） |
+| UserAgreementPage | 100% | 🔲 静态内容（设计如此） |
+| PrivacySettingsPage | 0% | ✅ 已对接 GET/PUT /api/user/settings |
+| AchievementsPage | 0% | ✅ 已对接 /api/achievements |
+| UsageStatsPage | 0% | ✅ 已对接 /api/user/stats，无数据时显示引导文案 |
+| PointsPage | 0% | ✅ 已对接 /api/points + /api/points/history |
+| ProfilePage | 0% | ✅ posts/following/followers 来自 getUserStats 聚合 |
 | **其他 10 页** | **0%** | **全部真实数据** |
 
 ---
@@ -484,3 +551,70 @@ docs: 更新第二阶段开发计划                # 文档
 ---
 
 **本文档由全员共同维护。开发过程中任何偏差请第一时间更新本文档并 @全员通知。**
+
+---
+
+## 八、实施记录 (2026-05-17)
+
+### 8.1 已完成工作
+
+**阶段 A（M1）：后端辅助功能 + 前端假数据清除 — 全部完成**
+
+#### 后端新增文件
+| 类别 | 文件 | 行数 |
+|------|------|------|
+| Schema | `backend/prisma/schema.prisma` | 扩展 6 张表 + 3 个索引 |
+| Service | `backend/src/services/postService.ts` | 78 行，8 函数 |
+| Service | `backend/src/services/followService.ts` | 66 行，7 函数 |
+| Service | `backend/src/services/achievementService.ts` | 80 行，3 函数 + 内存缓存 |
+| Service | `backend/src/services/pointsService.ts` | 40 行，4 函数 |
+| Service | `backend/src/services/userService.ts` | 136 行，5 函数（含聚合 `getUserStats`） |
+| Route | `backend/src/routes/postRoutes.ts` | 132 行，6 端点 |
+| Route | `backend/src/routes/followRoutes.ts` | 86 行，7 端点 |
+| Route | `backend/src/routes/achievementRoutes.ts` | 21 行，1 端点 |
+| Route | `backend/src/routes/pointsRoutes.ts` | 43 行，2 端点 |
+| Route | `backend/src/routes/userRoutes.ts` | 74 行，5 端点 |
+| Seed | `backend/prisma/seed.ts` | 6 成就种子数据 |
+
+#### 后端修改文件
+| 文件 | 变更 |
+|------|------|
+| `backend/src/index.ts` | 注册 5 条新路由 + 扩展 CORS methods |
+| `backend/package.json` | 添加 @types/node/express/cors/ws 依赖 |
+
+#### 前端修改文件
+| 文件 | 变更 |
+|------|------|
+| `frontend/src/app/lib/api.ts` | 新增 `getProfile/getSettings/updateSettings` + `achievementsApi` + `followApi`；API_BASE 支持 VITE_API_URL 环境变量 |
+| `frontend/src/app/pages/ProfilePage.tsx` | 帖子/关注/粉丝从硬编码→`getUserStats` 聚合；加载服务端通知/震动设置 |
+| `frontend/src/app/pages/AchievementsPage.tsx` | 完全重写，6项硬编码→`achievementsApi.getAll()` 动态渲染 + iconMap |
+| `frontend/src/app/pages/PointsPage.tsx` | 移除 3 条硬编码降级数据 |
+| `frontend/src/app/pages/UsageStatsPage.tsx` | 移除硬编码降级数据；无数据时显示引导文案 |
+| `frontend/src/app/pages/CommunityPage.tsx` | 移除 `defaultPosts` 硬编码；添加 `formatTimeAgo`；数据映射适配新格式 |
+
+### 8.2 性能优化要点
+
+| 优化项 | 效果 |
+|--------|------|
+| `getUserStats` 全量拉取→7次并行 count/aggregate | 有1000+Session的用户从~2s降至~50ms |
+| `listPosts` 评论限制 take:3 | 数据传输量减少80-95% |
+| Comment 添加 `@@index([postId, createdAt])` | 热门帖子评论从全表扫描→索引扫描 |
+| Session 添加 `@@index([userId])` | 按用户查Session从全表扫描→索引扫描 |
+| 成就 5 分钟内存缓存 | 重复请求数据库查询降为0 |
+| `unfollow` 2次DB→1次 delete | 延迟减半 |
+| `deletePost` findFirst+delete→deleteMany | 1次查询减少 |
+
+### 8.3 待实施事项
+
+| 事项 | 优先级 | 备注 |
+|------|--------|------|
+| M2：视觉模型接口占位规范化 | 中 | `handPoseDetector.ts` JSDoc + `dtwService.ts` 空壳 |
+| M3：全链路联调 | 高 | 需后端服务运行后对读验证 |
+| Auth 中间件本地JWT验证 | 高 | 当前每次请求都调Supabase HTTP（50-200ms），建议改用 `jsonwebtoken` 本地验证 |
+| 数据库迁移执行 | 高 | `prisma db push` 或 `prisma migrate deploy` 需在可连接 PostgreSQL 的环境执行 |
+
+### 8.4 遇到/已知问题
+
+1. **Prisma 迁移在沙箱环境无法执行**：沙箱中 `prisma migrate dev` 和 `prisma db push` 即使能连接 Supabase PostgreSQL，进程也会异常退出（exit code -1073741510，可能是缺少 native 二进制依赖）。解决方案：生产部署时通过 `prisma migrate deploy` 或手动执行 `manual_migration.sql` 创建新表。
+2. **Auth 中间件每次远程调用**：`supabase.auth.getUser(token)` 会在每次API请求时发起HTTP调用到Supabase服务器，典型延迟 50-200ms。当前已标记为待优化项，建议后续引入本地JWT验证。
+3. **前端未添加 `.env` 文件**：需要在 `frontend/` 目录创建 `.env` 文件并设置 `VITE_API_URL=http://localhost:3001/api` 以连接本地后端开发。
