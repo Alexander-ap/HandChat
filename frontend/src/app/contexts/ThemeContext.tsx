@@ -11,37 +11,37 @@ export const themes: Theme[] = [
   {
     id: 'light',
     name: '经典白',
-    background: '#F2F2F7',
+    background: 'linear-gradient(180deg, #f8fbff 0%, #eef3ff 42%, #f5f7fb 100%)',
     isDark: false,
   },
   {
     id: 'warm',
     name: '暖光色',
-    background: '#FFF8F0',
+    background: 'linear-gradient(180deg, #fffaf2 0%, #fff4e6 45%, #f8f0ea 100%)',
     isDark: false,
   },
   {
     id: 'cool',
     name: '清冷蓝',
-    background: '#EEF2FF',
+    background: 'linear-gradient(180deg, #f3f7ff 0%, #e9efff 44%, #eef2ff 100%)',
     isDark: false,
   },
   {
     id: 'green',
     name: '护眼绿',
-    background: '#ECFDF5',
+    background: 'linear-gradient(180deg, #f2fff8 0%, #e8fbf1 42%, #eefaf5 100%)',
     isDark: false,
   },
   {
     id: 'lavender',
     name: '薰衣草',
-    background: '#F5F3FF',
+    background: 'linear-gradient(180deg, #faf7ff 0%, #f1efff 45%, #f6f3ff 100%)',
     isDark: false,
   },
   {
     id: 'dark',
     name: '深色模式',
-    background: '#1C1C1E',
+    background: 'linear-gradient(180deg, #151a24 0%, #101522 46%, #0b1020 100%)',
     isDark: true,
   },
 ];

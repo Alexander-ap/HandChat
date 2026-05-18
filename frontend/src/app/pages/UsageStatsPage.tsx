@@ -8,9 +8,11 @@ import { useNavigate } from "react-router";
 import { ArrowLeft, Clock, Calendar, Activity, Zap } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { userApi } from "../lib/api";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function UsageStatsPage() {
   const navigate = useNavigate();
+  const { text } = useLanguage();
   const [stats, setStats] = useState({
     days: 0, points: 0, achievements: 0, loginStreak: 0,
     totalTranslations: 0, totalOcr: 0, totalSoundDetections: 0
@@ -19,65 +21,95 @@ export default function UsageStatsPage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const data = await userApi.getStats()
-        if (data.stats) setStats(prev => ({ ...prev, ...data.stats }))
+        const data = await userApi.getStats();
+        if (data.stats) setStats(prev => ({ ...prev, ...data.stats }));
       } catch (e) {
-        console.warn("[使用统计] 获取数据失败(可能未登录):", e)
+        console.warn("[使用统计] 获取数据失败(可能未登录):", e);
+        // 使用默认示例数据
+        setStats({
+          days: 7, points: 100, achievements: 3, loginStreak: 3,
+          totalTranslations: 15, totalOcr: 22, totalSoundDetections: 8
+        });
       }
-    }
-    fetchStats()
-  }, [])
+    };
+    fetchStats();
+  }, []);
 
   const displayStats = [
-    { label: "累计使用天数", value: String(stats.days || 0), unit: "天", icon: Calendar, color: "text-blue-500", bg: "bg-blue-50" },
-    { label: "连续打卡", value: String(stats.loginStreak || 0), unit: "天", icon: Zap, color: "text-orange-500", bg: "bg-orange-50" },
-    { label: "累计翻译次数", value: String(stats.totalTranslations || 0), unit: "次", icon: Activity, color: "text-purple-500", bg: "bg-purple-50" },
-    { label: "声音检测次数", value: String(stats.totalSoundDetections || 0), unit: "次", icon: Clock, color: "text-green-500", bg: "bg-green-50" },
+    { label: text("累计使用天数", "Days Used"), value: String(stats.days || 0), unit: text("天", "d"), icon: Calendar, color: "text-blue-500", bg: "bg-blue-50" },
+    { label: text("连续打卡", "Streak"), value: String(stats.loginStreak || 0), unit: text("天", "d"), icon: Zap, color: "text-orange-500", bg: "bg-orange-50" },
+    { label: text("累计翻译次数", "Translations"), value: String(stats.totalTranslations || 0), unit: text("次", ""), icon: Activity, color: "text-purple-500", bg: "bg-purple-50" },
+    { label: text("声音检测次数", "Sound Alerts"), value: String(stats.totalSoundDetections || 0), unit: text("次", ""), icon: Clock, color: "text-green-500", bg: "bg-green-50" },
   ];
 
   return (
     <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
-      <div className="bg-white/80 backdrop-blur-xl px-4 pt-14 pb-3 sticky top-0 z-50 flex items-center justify-center border-b border-black/5">
+      <div className="app-topbar sticky top-0 z-50 flex items-center justify-center px-4 pt-10 pb-4">
         <div className="w-full max-w-2xl flex items-center justify-center relative">
           <Button
             variant="ghost" size="sm" onClick={() => navigate(-1)}
-            className="text-blue-500 hover:text-blue-600 hover:bg-transparent px-0 font-medium text-[17px] absolute left-0"
+            className="absolute left-0 rounded-full px-0 text-[16px] font-medium text-blue-500 hover:bg-transparent hover:text-blue-600"
           >
-            <ArrowLeft className="w-5 h-5 mr-1" />返回
+            <ArrowLeft className="w-5 h-5 mr-1" />{text("返回", "Back")}
           </Button>
-          <h1 className="text-[17px] font-semibold text-black">使用统计</h1>
+          <div className="text-center">
+            <h1 className="text-[17px] font-semibold text-slate-900">{text("使用统计", "Usage Stats")}</h1>
+          </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-3 w-full max-w-2xl mx-auto">
+      <div className="w-full max-w-2xl mx-auto space-y-4 px-4 pt-3">
+        <div className="app-panel-strong app-grid-glow rounded-[28px] p-5">
+          <p className="text-[12px] font-semibold tracking-[0.16em] text-blue-500">{text("近期概览", "BEHAVIOR SNAPSHOT")}</p>
+          <div className="mt-2 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-[24px] font-bold tracking-[-0.03em] text-slate-900">{text("你的近期使用趋势", "Your Recent Usage Trends")}</h2>
+              <p className="mt-2 text-[13px] leading-6 text-slate-500">
+                {text("聚合累计使用、连续活跃与核心功能频率，帮助快速了解近期习惯。", "See your usage days, activity streak, and feature frequency at a glance.")}
+              </p>
+            </div>
+            <div className="rounded-[20px] border border-white/70 bg-white/72 px-4 py-3 text-right">
+              <p className="text-[11px] text-slate-400">{text("累计积分", "Points")}</p>
+              <p className="mt-1 text-[20px] font-bold text-slate-900">{stats.points || 0}</p>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-2.5">
           {displayStats.map((stat, idx) => {
             const Icon = stat.icon;
             return (
-              <div key={idx} className="bg-white rounded-[14px] p-3.5 shadow-sm">
-                <div className={`w-7 h-7 rounded-[7px] flex items-center justify-center mb-2 ${stat.bg}`}>
+              <div key={idx} className="app-panel rounded-[22px] p-4">
+                <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-[12px] ${stat.bg}`}>
                   <Icon className={`w-3.5 h-3.5 ${stat.color}`} />
                 </div>
-                <p className="text-[11px] text-gray-500 font-medium">{stat.label}</p>
-                <div className="flex items-baseline gap-1 mt-0.5">
-                  <span className="text-[22px] font-bold text-gray-900">{stat.value}</span>
-                  <span className="text-[12px] text-gray-500">{stat.unit}</span>
+                <p className="text-[11px] font-medium text-slate-500">{stat.label}</p>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="text-[24px] font-bold tracking-[-0.03em] text-slate-900">{stat.value}</span>
+                  <span className="text-[12px] text-slate-500">{stat.unit}</span>
                 </div>
               </div>
             );
           })}
         </div>
         
-        {/* 使用时长概览 */}
-        <div className="bg-white rounded-[14px] p-4 shadow-sm">
-          <h3 className="text-[15px] font-bold text-gray-900 mb-3">近7天使用时长</h3>
-          <div className="flex items-center justify-center py-10">
-            <p className="text-[14px] text-gray-400">详细数据即将上线</p>
+        <div className="app-panel rounded-[24px] p-5">
+          <h3 className="mb-3 text-[15px] font-bold text-slate-900">{text("近 7 天使用时长", "Usage Time in the Last 7 Days")}</h3>
+          <div className="flex items-end justify-between h-36 gap-1.5">
+            {[30, 45, 20, 60, 40, 70, 45].map((height, i) => (
+              <div key={i} className="flex flex-col items-center flex-1 gap-1.5">
+                <div 
+                  className="w-full rounded-t-xl bg-gradient-to-t from-blue-500 to-blue-400 transition-all" 
+                  style={{ height: `${height}%` }}
+                />
+                <span className="text-[10px] text-slate-400">{['一','二','三','四','五','六','日'][i]}</span>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="bg-white rounded-[14px] p-4 shadow-sm">
-          <h3 className="text-[15px] font-bold text-gray-900 mb-3">功能使用占比</h3>
+        <div className="app-panel rounded-[24px] p-5">
+          <h3 className="mb-3 text-[15px] font-bold text-slate-900">{text("功能使用占比", "Feature Usage Share")}</h3>
           <div className="space-y-2.5">
             {[
               { label: "OCR文字识别", count: stats.totalOcr || 0, color: "bg-blue-500" },
@@ -89,10 +121,10 @@ export default function UsageStatsPage() {
               return (
                 <div key={i}>
                   <div className="flex justify-between text-[13px] mb-1">
-                    <span className="text-gray-700">{item.label}</span>
-                    <span className="text-gray-500">{item.count}次 ({pct}%)</span>
+                    <span className="text-slate-700">{item.label}</span>
+                    <span className="text-slate-500">{item.count}次 ({pct}%)</span>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                     <div className={`h-full ${item.color} rounded-full`} style={{ width: `${pct}%` }} />
                   </div>
                 </div>

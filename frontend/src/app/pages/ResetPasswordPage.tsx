@@ -5,11 +5,13 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
+import { useLanguage } from "../contexts/LanguageContext";
 
 type PageState = "loading" | "ready" | "success" | "invalid";
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
+  const { text } = useLanguage();
   const [pageState, setPageState] = useState<PageState>("loading");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -91,8 +93,8 @@ export default function ResetPasswordPage() {
   // ── 加载中 ──
   if (pageState === "loading") {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-[#F2F2F7] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-[#F2F2F7] px-6">
+        <div className="app-panel-strong rounded-[28px] px-8 py-10 flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
           <p className="text-sm text-gray-400">正在验证重置链接…</p>
         </div>
@@ -105,7 +107,7 @@ export default function ResetPasswordPage() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-[#F2F2F7] flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-md text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mb-6">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mb-6 shadow-[0_16px_30px_rgba(248,113,113,0.12)]">
             <AlertCircle className="w-10 h-10 text-red-500" />
           </div>
           <h1 className="text-[24px] font-bold text-gray-900 mb-3">链接已失效</h1>
@@ -128,7 +130,7 @@ export default function ResetPasswordPage() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-green-50 to-[#F2F2F7] flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-md text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6 shadow-[0_16px_30px_rgba(34,197,94,0.12)]">
             <CheckCircle className="w-10 h-10 text-green-500" />
           </div>
           <h1 className="text-[24px] font-bold text-gray-900 mb-3">密码已重置</h1>
@@ -147,18 +149,30 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-[#F2F2F7] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-500 rounded-[24px] mb-5 shadow-[0_10px_40px_rgba(59,130,246,0.3)]">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-500 rounded-[24px] mb-5 shadow-[0_14px_40px_rgba(59,130,246,0.28)]">
             <Hand className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-[26px] font-bold text-gray-900 mb-2 tracking-tight">设置新密码</h1>
           <p className="text-[15px] text-gray-500">请输入您的新密码，至少6位字符</p>
         </div>
 
-        <div className="bg-white/80 backdrop-blur-xl rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white p-8">
+        <div className="app-panel-strong app-grid-glow rounded-[32px] p-8">
+          <div className="mb-5 grid grid-cols-3 gap-3">
+            <div className="rounded-[18px] border border-white/70 bg-white/72 px-3 py-3">
+              <p className="text-[11px] text-slate-400">安全流程</p>
+              <p className="mt-1 text-[13px] font-medium text-slate-800">邮件验证</p>
+            </div>
+            <div className="rounded-[18px] border border-white/70 bg-white/72 px-3 py-3">
+              <p className="text-[11px] text-slate-400">密码要求</p>
+              <p className="mt-1 text-[13px] font-medium text-slate-800">至少 6 位</p>
+            </div>
+            <div className="rounded-[18px] border border-white/70 bg-white/72 px-3 py-3">
+              <p className="text-[11px] text-slate-400">生效方式</p>
+              <p className="mt-1 text-[13px] font-medium text-slate-800">立即更新</p>
+            </div>
+          </div>
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* 新密码 */}
             <div>
               <label className="block text-[14px] font-medium text-gray-700 mb-2 ml-1">
                 新密码
@@ -181,7 +195,6 @@ export default function ResetPasswordPage() {
               </div>
             </div>
 
-            {/* 确认密码 */}
             <div>
               <label className="block text-[14px] font-medium text-gray-700 mb-2 ml-1">
                 确认新密码
@@ -202,7 +215,6 @@ export default function ResetPasswordPage() {
                   {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
-              {/* 密码一致性提示 */}
               {confirmPassword && (
                 <p className={`text-[12px] mt-1.5 ml-1 ${password === confirmPassword ? "text-green-500" : "text-red-400"}`}>
                   {password === confirmPassword ? "✓ 两次密码一致" : "✗ 密码不一致"}
@@ -210,7 +222,6 @@ export default function ResetPasswordPage() {
               )}
             </div>
 
-            {/* 提交 */}
             <Button
               type="submit"
               disabled={isLoading}
@@ -227,7 +238,6 @@ export default function ResetPasswordPage() {
             </Button>
           </form>
 
-          {/* 返回登录 */}
           <div className="text-center mt-6">
             <button
               onClick={() => navigate("/login", { replace: true })}

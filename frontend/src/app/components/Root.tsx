@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router";
 import BottomNav from "./BottomNav";
 import WelcomeScreen from "./WelcomeScreen";
 import { useTheme } from "../contexts/ThemeContext";
+import { useLanguage } from "../contexts/LanguageContext";
 import { supabase } from "../lib/supabase";
 import { syncAuthToken } from "../lib/api";
 
@@ -33,6 +34,7 @@ function RootContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const pageStateRef = useRef<Record<string, any>>({});
   const { currentTheme } = useTheme();
+  const { text } = useLanguage();
   const historyStackRef = useRef<string[]>([]);
 
   const contextValue: PageStateContext = {
@@ -115,7 +117,7 @@ function RootContent() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: currentTheme.background }}>
         <div className="flex flex-col items-center gap-3">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-          <p className="text-sm text-gray-400">正在检查登录状态...</p>
+          <p className="text-sm text-gray-400">{text("正在检查登录状态...", "Checking sign-in status...")}</p>
         </div>
       </div>
     );
@@ -123,11 +125,18 @@ function RootContent() {
 
   return (
     <div
-      className="min-h-screen pb-16 transition-colors duration-500"
+      className="relative min-h-screen pb-20 transition-colors duration-500"
       style={{ background: currentTheme.background }}
     >
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-0 mx-auto h-[320px] max-w-5xl overflow-hidden">
+        <div className="absolute left-[-6%] top-[-20%] h-56 w-56 rounded-full bg-blue-300/20 blur-3xl" />
+        <div className="absolute right-[-8%] top-8 h-64 w-64 rounded-full bg-cyan-200/20 blur-3xl" />
+        <div className="absolute left-1/2 top-24 h-44 w-44 -translate-x-1/2 rounded-full bg-violet-200/20 blur-3xl" />
+      </div>
       {showWelcome && <WelcomeScreen onComplete={handleWelcomeComplete} />}
-      <Outlet context={contextValue} />
+      <div className="relative z-10">
+        <Outlet context={contextValue} />
+      </div>
       {!hideNav && <BottomNav />}
     </div>
   );

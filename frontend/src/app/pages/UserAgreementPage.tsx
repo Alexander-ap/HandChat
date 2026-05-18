@@ -5,9 +5,11 @@
 import { useNavigate } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function UserAgreementPage() {
   const navigate = useNavigate();
+  const { text } = useLanguage();
 
   const sections = [
     {
@@ -71,29 +73,38 @@ export default function UserAgreementPage() {
 
   return (
     <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
-      <div className="bg-white/80 backdrop-blur-xl px-4 pt-14 pb-3 sticky top-0 z-50 flex items-center justify-center border-b border-black/5">
+      <div className="app-topbar sticky top-0 z-50 flex items-center justify-center px-4 pt-10 pb-4">
         <div className="w-full max-w-2xl flex items-center justify-center relative">
           <Button
             variant="ghost" size="sm" onClick={() => navigate("/profile")}
-            className="text-blue-500 hover:text-blue-600 hover:bg-transparent px-0 font-medium text-[17px] absolute left-0"
+            className="absolute left-0 rounded-full px-0 text-[16px] font-medium text-blue-500 hover:bg-transparent hover:text-blue-600"
           >
             <ArrowLeft className="w-5 h-5 mr-1" />返回
           </Button>
-          <h1 className="text-[17px] font-semibold text-black">用户协议</h1>
+          <div className="text-center">
+            <h1 className="text-[17px] font-semibold text-slate-900">用户协议</h1>
+          </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-3 w-full max-w-2xl mx-auto">
-        <div className="bg-white rounded-[14px] p-4 shadow-sm">
-          <h2 className="text-[17px] font-bold text-gray-900 mb-4">手语助手用户服务协议</h2>
+      <div className="w-full max-w-2xl mx-auto space-y-4 px-4 pt-3">
+        <div className="app-panel-strong app-grid-glow rounded-[28px] p-5">
+          <p className="text-[12px] font-semibold tracking-[0.16em] text-blue-500">{text("服务条款", "SERVICE TERMS")}</p>
+          <h2 className="mt-1 text-[24px] font-bold tracking-[-0.03em] text-slate-900">手语助手用户服务协议</h2>
+          <p className="mt-2 text-[13px] leading-6 text-slate-500">
+            这里整理了服务说明、用户责任、隐私保护与免责声明等核心条款，便于快速查阅。
+          </p>
+        </div>
+
+        <div className="app-panel rounded-[24px] p-5">
           
-          <div className="space-y-4 text-[14px] text-gray-700 leading-relaxed">
+          <div className="space-y-4 text-[14px] leading-relaxed text-slate-700">
             {sections.map((section, idx) => (
-              <section key={idx}>
-                <h3 className="text-[15px] font-bold text-gray-900 mb-1.5">{section.title}</h3>
+              <section key={idx} className="rounded-[18px] border border-white/70 bg-white/72 p-4">
+                <h3 className="mb-1.5 text-[15px] font-bold text-slate-900">{section.title}</h3>
                 <p>{section.content}</p>
                 {section.list && (
-                  <ul className="list-disc list-inside space-y-1 ml-2 mt-1.5">
+                  <ul className="mt-2 space-y-1.5 pl-1">
                     {section.list.map((item, i) => <li key={i}>{item}</li>)}
                   </ul>
                 )}
@@ -101,9 +112,9 @@ export default function UserAgreementPage() {
             ))}
           </div>
 
-          <div className="mt-6 pt-4 border-t border-gray-100">
-            <p className="text-[12px] text-gray-400 text-center">本协议最后更新日期：2026年3月29日</p>
-            <p className="text-[12px] text-gray-400 text-center mt-1">© 2026 手语助手团队 · 关爱听障人群</p>
+          <div className="mt-6 border-t border-gray-100 pt-4">
+            <p className="text-center text-[12px] text-gray-400">本协议最后更新日期：2026年3月29日</p>
+            <p className="mt-1 text-center text-[12px] text-gray-400">© 2026 手语助手团队 · 关爱听障人群</p>
           </div>
         </div>
       </div>

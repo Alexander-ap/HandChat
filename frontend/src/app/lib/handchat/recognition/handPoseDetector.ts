@@ -1,24 +1,33 @@
-export interface HandDetector {
-  estimateHands: (
-    video: HTMLVideoElement,
-    options?: { flipHorizontal?: boolean }
-  ) => Promise<Array<{
-    handedness: "Left" | "Right";
-    score: number;
-    keypoints: Array<{ x: number; y: number; z: number }>;
-    keypoints3D: Array<{ x: number; y: number; z: number }>;
-  }>>;
-  dispose?: () => void;
-}
+import * as tf from "@tensorflow/tfjs";
+import "@tensorflow/tfjs-backend-webgl";
+import * as handPoseDetection from "@tensorflow-models/hand-pose-detection";
+
+export type HandDetector = handPoseDetection.HandDetector;
 
 export interface CreateHandDetectorOptions {
   maxHands?: number;
 }
 
-export async function createHandDetector(
-  _options: CreateHandDetectorOptions = {}
-): Promise<HandDetector> {
-  throw new Error(
-    "手部检测模型尚未集成。请接入 @mediapipe/tasks-vision 或替换实现。"
-  );
+async function ensureBackendReady() {
+  try {
+    await tf.setBackend("webgl");
+    await tf.ready();
+    return;
+  } catch (_) {}
+
+  await tf.setBackend("cpu");
+  await tf.ready();
 }
+
+export async function createHandDetector(
+  options: CreateHandDetectorOptions = {}
+): Promise<HandDetector> {
+  await ensureBackendReady();
+
+  return handPoseDetection.createDetector(handPoseDetection.SupportedModels.MediaPipeHands, {
+    runtime: "tfjs",
+    modelType: "lite",
+    maxHands: options.maxHands ?? 2,
+  });
+}
+

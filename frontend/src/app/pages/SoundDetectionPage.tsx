@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useOutletContext, useNavigate } from "react-router";
+import { useOutletContext } from "react-router";
 import { 
   Volume2, 
   Bell, 
@@ -25,7 +25,6 @@ import {
   Phone, 
   DoorOpen, 
   Clock,
-  ArrowLeft,
   Mic,
   MicOff,
   Activity,
@@ -42,6 +41,7 @@ import { toast } from "sonner";
 import { PageStateContext } from "../components/Root";
 import { soundApi, userApi } from "../lib/api";
 import { motion } from "motion/react";
+import { useLanguage } from "../contexts/LanguageContext";
 
 /** 支持的声音类型定义 */
 const soundTypes = [
@@ -63,8 +63,8 @@ interface Detection {
 }
 
 export default function SoundDetectionPage() {
-  const navigate = useNavigate();
   const { getPageState, setPageState } = useOutletContext<PageStateContext>();
+  const { text } = useLanguage();
   const savedState = getPageState('soundDetection') || {};
 
   // 状态管理
@@ -563,38 +563,33 @@ export default function SoundDetectionPage() {
 
   return (
     <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
-      {/* iOS 风格头部 */}
-      <div className="bg-white/80 backdrop-blur-xl px-4 pt-14 pb-3 sticky top-0 z-50 flex items-center justify-center border-b border-black/5">
-        <div className="w-full max-w-2xl flex items-center justify-center relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/")}
-            className="absolute left-0 text-blue-500 hover:text-blue-600 hover:bg-transparent"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </Button>
-          <h1 className="text-[17px] font-semibold text-black">环境音感知</h1>
+      {/* Header */}
+      <div className="app-topbar sticky top-0 z-50 flex items-center justify-center px-4 pt-12 pb-4">
+        <div className="w-full max-w-2xl flex items-center">
+          <div>
+            <h1 className="mb-1 text-[30px] font-bold tracking-[-0.03em] text-slate-900">{text("环境音感知", "Sound Awareness")}</h1>
+            <p className="text-[13px] text-slate-500">{text("实时监听环境声音并进行智能提醒", "Listen to surrounding sounds in real time and provide smart alerts")}</p>
+          </div>
         </div>
       </div>
 
-      <div className="p-4 space-y-2.5 w-full max-w-2xl mx-auto">
+      <div className="w-full max-w-2xl mx-auto space-y-4 px-4 pt-4">
         {/* 主监听卡片 */}
-        <div className="bg-gradient-to-br from-[#007AFF] to-[#0051FF] rounded-[18px] p-3.5 text-white shadow-[0_8px_16px_rgba(0,122,255,0.2)]">
+        <div className="app-panel-strong app-grid-glow overflow-hidden rounded-[28px] p-5 text-slate-900">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-[18px] font-bold mb-0.5">环境音监听</h2>
-              <p className="text-white/80 text-[13px]">
+              <h2 className="mb-1 text-[22px] font-bold tracking-[-0.03em] text-slate-900">{text("环境音监听", "Sound Monitoring")}</h2>
+              <p className="text-[13px] text-slate-500">
                 {isMonitoring 
-                  ? (isDemoMode ? "模拟体验模式运行中..." : (isAnalyzing ? "AI正在分析声音..." : "正在实时监听...")) 
-                  : "点击开始检测"}
+                  ? (isDemoMode ? text("模拟体验模式运行中...", "Demo mode is running...") : (isAnalyzing ? text("正在分析声音...", "Analyzing sound...") : text("正在实时监听...", "Listening in real time..."))) 
+                  : text("点击开始检测", "Tap to start detection")}
               </p>
             </div>
             <motion.div 
               animate={isMonitoring ? { scale: [1, 1.1, 1] } : {}}
               transition={{ duration: 2, repeat: Infinity }}
-              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
-                isMonitoring ? "bg-white/20" : "bg-white/10"
+              className={`flex h-14 w-14 items-center justify-center rounded-[20px] transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ${
+                isMonitoring ? "bg-blue-500/[0.12] text-blue-600" : "bg-slate-100/80 text-slate-400"
               }`}
             >
               {isMonitoring ? (
@@ -607,15 +602,15 @@ export default function SoundDetectionPage() {
 
           {/* 实时音量显示 */}
           {isMonitoring && (
-            <div className="mb-4">
-              <div className="flex justify-between text-[12px] text-white/80 mb-1.5">
+            <div className="mb-4 rounded-[22px] border border-white/70 bg-white/72 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+              <div className="mb-2 flex justify-between text-[12px] text-slate-500">
                 <span className="flex items-center gap-1">
                   <Activity className="w-3 h-3" />
                   当前音量
                 </span>
                 <span>{currentVolume}%</span>
               </div>
-              <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+              <div className="h-2 overflow-hidden rounded-full bg-slate-200/80">
                 <motion.div 
                   className={`h-full ${getVolumeColor()} rounded-full`}
                   animate={{ width: `${currentVolume}%` }}
@@ -623,7 +618,7 @@ export default function SoundDetectionPage() {
                 />
               </div>
               {/* API 模式指示 */}
-              <div className="flex items-center gap-1 mt-2 text-[11px] text-white/60">
+              <div className="mt-3 flex items-center gap-1 text-[11px] text-slate-400">
                 {apiMode !== "--" ? (
                   <><Wifi className="w-3 h-3" /> 识别引擎: {apiMode}</>
                 ) : (
@@ -635,10 +630,10 @@ export default function SoundDetectionPage() {
 
           <Button
             onClick={toggleMonitoring}
-            className={`w-full h-11 rounded-[12px] font-semibold text-[15px] transition-all active:scale-[0.98] ${
+            className={`w-full h-12 rounded-[16px] text-[15px] font-semibold ${
               isMonitoring
-                ? "bg-white text-[#007AFF] hover:bg-gray-50"
-                : "bg-white/20 hover:bg-white/30 text-white"
+                ? "bg-red-50 text-red-600 hover:bg-red-100 shadow-none"
+                : ""
             }`}
           >
             {isMonitoring ? "停止监听" : "开始监听"}
@@ -646,8 +641,8 @@ export default function SoundDetectionPage() {
 
           {/* 模拟模式快捷触发 */}
           {isMonitoring && isDemoMode && (
-            <div className="mt-4 pt-4 border-t border-white/20">
-              <p className="text-[12px] text-white/90 mb-2.5 flex items-center gap-1">
+            <div className="mt-4 border-t border-slate-200/70 pt-4">
+              <p className="mb-2.5 flex items-center gap-1 text-[12px] text-slate-600">
                 <Activity className="w-3.5 h-3.5" /> 
                 请点击下方按钮测试警报效果：
               </p>
@@ -662,7 +657,7 @@ export default function SoundDetectionPage() {
                         triggerAlert(sound.id, 85 + Math.floor(Math.random() * 15), sound.label);
                         setTimeout(() => setCurrentVolume(Math.floor(Math.random() * 40) + 10), 1500);
                       }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 transition-colors text-[13px] text-white"
+                      className="flex items-center gap-1.5 rounded-full border border-white/70 bg-white/72 px-3 py-1.5 text-[13px] text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition-colors hover:bg-white"
                     >
                       <Icon className="w-3.5 h-3.5" />
                       {sound.label}
@@ -670,7 +665,7 @@ export default function SoundDetectionPage() {
                   );
                 })}
                 {soundTypes.filter(s => enabledSounds.includes(s.id)).length === 0 && (
-                  <span className="text-[12px] text-white/60">请先在下方开启监听的声音类型</span>
+                  <span className="text-[12px] text-slate-400">请先在下方开启监听的声音类型</span>
                 )}
               </div>
             </div>
@@ -678,14 +673,24 @@ export default function SoundDetectionPage() {
         </div>
 
         {/* 功能说明 */}
-        <p className="text-[12px] text-gray-500 px-1 leading-relaxed">
-          开启监听后，当环境声音超过灵敏度阈值时，系统会自动采集音频片段并通过AI智能识别声音类型（如警报、门铃、哭声等），识别成功后通过震动和弹窗提醒您。
-        </p>
+        <div className="app-panel rounded-[22px] p-4">
+          <div className="flex items-start gap-2.5">
+            <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-2xl bg-blue-500/[0.08]">
+              <Volume2 className="h-3.5 w-3.5 text-blue-500" />
+            </div>
+            <div>
+              <h3 className="mb-1 text-[14px] font-semibold text-slate-900">使用说明</h3>
+              <p className="text-[12px] leading-relaxed text-slate-500">
+                开启监听后，当环境声音超过灵敏度阈值时，系统会自动采集音频片段并通过 AI 智能识别声音类型，如警报、门铃、哭声等；识别成功后会通过震动和弹窗提醒您。
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* 语音转文字实时显示 */}
         <div>
-          <div className="flex items-center justify-between mb-1.5 ml-4 mr-1">
-            <h3 className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <h3 className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               <MessageSquare className="w-3.5 h-3.5" />
               语音转文字
               {isSpeaking && (
@@ -722,9 +727,9 @@ export default function SoundDetectionPage() {
               />
             </div>
           </div>
-          <div className="bg-white rounded-[14px] shadow-sm overflow-hidden">
+          <div className="app-panel overflow-hidden rounded-[24px]">
             {!speechEnabled ? (
-              <div className="py-6 text-center text-gray-400 text-[14px]">
+              <div className="py-8 text-center text-gray-400 text-[14px]">
                 <MicOff className="w-7 h-7 mx-auto mb-1.5 opacity-40" />
                 语音转文字已关闭
               </div>
@@ -740,7 +745,7 @@ export default function SoundDetectionPage() {
                     <p className="text-[11px] text-gray-300 mt-1">检测到说话时会提醒您并显示内容</p>
                   </div>
                 ) : (
-                  <div className="p-3 space-y-2.5">
+                  <div className="p-4 space-y-3">
                     {speechMessages.map((msg) => (
                       <motion.div
                         key={msg.id}
@@ -757,7 +762,7 @@ export default function SoundDetectionPage() {
                             <span className="text-[13px] font-medium text-indigo-500">有人说话</span>
                             <span className="text-[11px] text-gray-300">{msg.time}</span>
                           </div>
-                          <div className="bg-[#F2F2F7] rounded-[10px] rounded-tl-[3px] px-3 py-2">
+                          <div className="rounded-[14px] rounded-tl-[4px] border border-white/70 bg-slate-50/80 px-3 py-2.5 shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
                             <p className="text-[14px] text-gray-800 leading-relaxed">{msg.text}</p>
                           </div>
                         </div>
@@ -781,7 +786,7 @@ export default function SoundDetectionPage() {
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="text-[13px] font-medium text-blue-500">正在说话...</span>
                           </div>
-                          <div className="bg-blue-50 rounded-[10px] rounded-tl-[3px] px-3 py-2 border border-blue-100">
+                          <div className="rounded-[14px] rounded-tl-[4px] border border-blue-100 bg-blue-50/80 px-3 py-2.5">
                             <p className="text-[14px] text-blue-700 leading-relaxed">{currentTranscript}</p>
                           </div>
                         </div>
@@ -796,13 +801,13 @@ export default function SoundDetectionPage() {
 
         {/* 灵敏度设置 */}
         <div>
-          <h3 className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 ml-4">
+          <h3 className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
             识别灵敏度
           </h3>
-          <div className="bg-white rounded-[14px] p-3.5 shadow-sm">
+          <div className="app-panel rounded-[24px] p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[15px] text-black">灵敏度</span>
-              <span className="text-[15px] font-medium text-[#007AFF]">
+              <span className="text-[15px] text-slate-900">灵敏度</span>
+              <span className="text-[15px] font-medium text-blue-500">
                 {sensitivity[0]}%
               </span>
             </div>
@@ -822,20 +827,20 @@ export default function SoundDetectionPage() {
 
         {/* 声音类型选择 */}
         <div>
-          <h3 className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 ml-4">
+          <h3 className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
             监听声音类型
           </h3>
-          <div className="bg-white rounded-[14px] shadow-sm overflow-hidden">
+          <div className="app-panel overflow-hidden rounded-[24px]">
             {soundTypes.map((sound, index) => {
               const Icon = sound.icon;
               const isEnabled = enabledSounds.includes(sound.id);
               const isLast = index === soundTypes.length - 1;
               return (
-                <div key={sound.id} className="flex items-center gap-3 px-3.5 py-2.5" style={!isLast ? { borderBottom: '0.5px solid rgba(0,0,0,0.06)' } : {}}>
-                  <div className={`w-[28px] h-[28px] rounded-[7px] flex items-center justify-center ${sound.bgClass}`}>
+                <div key={sound.id} className="flex items-center gap-3 px-4 py-3" style={!isLast ? { borderBottom: '1px solid rgba(148,163,184,0.10)' } : {}}>
+                  <div className={`h-9 w-9 rounded-[12px] flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] ${sound.bgClass}`}>
                     <Icon className={`w-3.5 h-3.5 ${sound.textClass}`} />
                   </div>
-                  <span className="text-[15px] text-black flex-1">{sound.label}</span>
+                  <span className="flex-1 text-[15px] text-slate-900">{sound.label}</span>
                   <Switch
                     checked={isEnabled}
                     onCheckedChange={() => toggleSound(sound.id)}
@@ -849,12 +854,12 @@ export default function SoundDetectionPage() {
 
         {/* 检测记录 */}
         <div>
-          <h3 className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 ml-4">
+          <h3 className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
             最近检测记录 ({recentDetections.length})
           </h3>
-          <div className="bg-white rounded-[14px] shadow-sm overflow-hidden">
+          <div className="app-panel overflow-hidden rounded-[24px]">
             {recentDetections.length === 0 ? (
-              <div className="py-8 text-center text-gray-400 text-[14px]">
+              <div className="py-10 text-center text-gray-400 text-[14px]">
                 <Volume2 className="w-8 h-8 mx-auto mb-2 opacity-40" />
                 暂无检测记录
               </div>
@@ -868,14 +873,14 @@ export default function SoundDetectionPage() {
                 return (
                   <div 
                     key={index} 
-                    className="flex items-center gap-3 px-3.5 py-2.5"
-                    style={!isLast ? { borderBottom: '0.5px solid rgba(0,0,0,0.06)' } : {}}
+                    className="flex items-center gap-3 px-4 py-3"
+                    style={!isLast ? { borderBottom: '1px solid rgba(148,163,184,0.10)' } : {}}
                   >
-                    <div className={`w-[28px] h-[28px] rounded-[7px] flex items-center justify-center ${soundType.bgClass}`}>
+                    <div className={`h-9 w-9 rounded-[12px] flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] ${soundType.bgClass}`}>
                       <Icon className={`w-3.5 h-3.5 ${soundType.textClass}`} />
                     </div>
                     <div className="flex-1">
-                      <span className="text-[15px] text-black">{detection.label || soundType.label}</span>
+                      <span className="text-[15px] text-slate-900">{detection.label || soundType.label}</span>
                       <div className="flex items-center gap-1 text-[12px] text-gray-400 mt-0.5">
                         <Clock className="w-3 h-3" />
                         {detection.time}
@@ -898,13 +903,18 @@ export default function SoundDetectionPage() {
         </div>
 
         {/* 科大讯飞API配置说明 */}
-        <div className="bg-blue-50 rounded-[14px] p-3 flex items-start gap-2.5">
-          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
-            <Mic className="w-3 h-3 text-blue-500" />
+        <div className="rounded-[20px] border border-blue-100/80 bg-blue-500/[0.06] p-4 shadow-[0_12px_28px_rgba(37,99,235,0.06)]">
+          <div className="flex items-start gap-2.5">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-blue-500/[0.08]">
+              <Mic className="h-3.5 w-3.5 text-blue-500" />
+            </div>
+            <div>
+              <h3 className="mb-1 text-[14px] font-semibold text-slate-900">能力说明</h3>
+              <p className="text-[12px] leading-relaxed text-slate-500">
+                已集成<strong className="text-slate-700">科大讯飞声音事件检测API</strong>，支持智能识别门铃、警报、哭声等多种环境声音，语音转文字功能由浏览器语音识别引擎驱动。
+              </p>
+            </div>
           </div>
-          <p className="text-[12px] text-gray-500 leading-relaxed">
-            已集成<strong className="text-gray-700">科大讯飞声音事件检测API</strong>，支持智能识别门铃、警报、哭声等多种环境声音，语音转文字功能由浏览器语音识别引擎驱动。
-          </p>
         </div>
       </div>
     </div>

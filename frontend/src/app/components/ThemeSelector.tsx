@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 import { themes, useTheme } from '../contexts/ThemeContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface ThemeSelectorProps {
   open: boolean;
@@ -9,13 +10,14 @@ interface ThemeSelectorProps {
 
 export default function ThemeSelector({ open, onClose }: ThemeSelectorProps) {
   const { currentTheme, setTheme } = useTheme();
+  const { text } = useLanguage();
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm rounded-[20px] p-5">
         <DialogHeader>
-          <DialogTitle className="text-[17px] font-semibold text-center">背景主题</DialogTitle>
-          <DialogDescription className="text-[13px] text-gray-500 text-center">选择适合您的背景色</DialogDescription>
+          <DialogTitle className="text-[17px] font-semibold text-center">{text("背景主题", "Theme Background")}</DialogTitle>
+          <DialogDescription className="text-[13px] text-gray-500 text-center">{text("选择适合您的背景色", "Choose the background that feels best for you")}</DialogDescription>
         </DialogHeader>
         <div className="mt-4 grid grid-cols-3 gap-3">
           {themes.map((theme) => (

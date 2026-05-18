@@ -2,48 +2,50 @@ import { useState } from "react";
 import { Hand, Camera, Volume2, MessageCircle, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "./ui/button";
 import { motion, AnimatePresence } from "motion/react";
+import { useLanguage } from "../contexts/LanguageContext";
 
 interface WelcomeScreenProps {
   onComplete: () => void;
 }
 
-const slides = [
-  {
-    icon: Camera,
-    title: "视觉文字辅助",
-    description: "通过相机快速识别文字，支持OCR智能识别和文字放大功能，让信息触手可及",
-    bgColor: "bg-blue-100",
-    iconColor: "text-blue-500",
-    accentColor: "from-blue-400 to-blue-600",
-  },
-  {
-    icon: Hand,
-    title: "手语双向转换",
-    description: "实现手语动作到文字的实时转换，支持文字输入转手语图片展示，沟通无障碍",
-    bgColor: "bg-green-100",
-    iconColor: "text-green-500",
-    accentColor: "from-green-400 to-emerald-600",
-  },
-  {
-    icon: Volume2,
-    title: "环境音感知",
-    description: "智能识别门铃、警报等环境声音，通过震动和视觉提醒及时通知您，安全有保障",
-    bgColor: "bg-purple-100",
-    iconColor: "text-purple-500",
-    accentColor: "from-purple-400 to-purple-600",
-  },
-  {
-    icon: MessageCircle,
-    title: "专属社交社区",
-    description: "为听障群体打造的温暖交流平台，分享经验、互相帮助、共同成长",
-    bgColor: "bg-pink-100",
-    iconColor: "text-pink-500",
-    accentColor: "from-pink-400 to-rose-600",
-  },
-];
-
 export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const { text } = useLanguage();
+
+  const slides = [
+    {
+      icon: Camera,
+      title: text("视觉文字辅助", "Smart Vision Assistance"),
+      description: text("通过相机快速识别文字，支持 OCR 智能识别和文字放大功能，让信息触手可及", "Use the camera to recognize text quickly, enlarge key content, and make information easier to access."),
+      bgColor: "bg-blue-100",
+      iconColor: "text-blue-500",
+      accentColor: "from-blue-400 to-blue-600",
+    },
+    {
+      icon: Hand,
+      title: text("手语双向转换", "Two-Way Sign Translation"),
+      description: text("实现手语动作到文字的实时转换，支持文字输入转手语图片展示，沟通无障碍", "Translate sign gestures into text in real time and convert text into sign illustrations for smoother communication."),
+      bgColor: "bg-green-100",
+      iconColor: "text-green-500",
+      accentColor: "from-green-400 to-emerald-600",
+    },
+    {
+      icon: Volume2,
+      title: text("环境音感知", "Ambient Sound Alerts"),
+      description: text("智能识别门铃、警报等环境声音，通过震动和视觉提醒及时通知您，安全有保障", "Detect doorbells, alarms, and other important sounds with vibration and visual alerts for safer awareness."),
+      bgColor: "bg-purple-100",
+      iconColor: "text-purple-500",
+      accentColor: "from-purple-400 to-purple-600",
+    },
+    {
+      icon: MessageCircle,
+      title: text("专属社交社区", "Inclusive Community"),
+      description: text("为听障群体打造的温暖交流平台，分享经验、互相帮助、共同成长", "A welcoming space for deaf and hard-of-hearing users to share experiences, support each other, and grow together."),
+      bgColor: "bg-pink-100",
+      iconColor: "text-pink-500",
+      accentColor: "from-pink-400 to-rose-600",
+    },
+  ];
 
   const handleNext = () => {
     // 触觉反馈
@@ -66,7 +68,7 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
           onClick={onComplete}
           className="text-[14px] text-gray-400 hover:text-gray-600 px-3 py-1.5 rounded-full transition-colors"
         >
-          跳过
+          {text("跳过", "Skip")}
         </button>
       </div>
 
@@ -120,11 +122,11 @@ export default function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
           {currentSlide === slides.length - 1 ? (
             <span className="flex items-center gap-2">
               <Sparkles className="w-5 h-5" />
-              立即开始
+              {text("立即开始", "Get Started")}
             </span>
           ) : (
             <span className="flex items-center gap-1">
-              下一步
+              {text("下一步", "Next")}
               <ChevronRight className="w-5 h-5" />
             </span>
           )}

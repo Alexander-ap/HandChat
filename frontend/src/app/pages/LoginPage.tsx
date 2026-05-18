@@ -6,12 +6,14 @@ import { Input } from "../components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
 import { authApi } from "../lib/api";
+import { useLanguage } from "../contexts/LanguageContext";
 
 // 页面模式：登录 / 注册 / 找回密码
 type Mode = "login" | "register" | "forgot";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { language, setLanguage, text } = useLanguage();
   const [mode, setMode] = useState<Mode>("login");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +46,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.email || !formData.password) {
-      toast.error("请输入邮箱和密码");
+      toast.error(text("请输入邮箱和密码", "Please enter your email and password"));
       return;
     }
 
@@ -57,17 +59,17 @@ export default function LoginPage() {
         });
         if (error) throw error;
         if (!data.session) throw new Error("登录失败，未获取到会话");
-        toast.success("登录成功");
+        toast.success(text("登录成功", "Signed in successfully"));
         navigate("/", { replace: true });
       } else {
         // 注册
         if (!formData.name.trim()) {
-          toast.error("请输入昵称");
+          toast.error(text("请输入昵称", "Please enter a display name"));
           setIsLoading(false);
           return;
         }
         if (formData.password.length < 6) {
-          toast.error("密码至少需要6位");
+          toast.error(text("密码至少需要6位", "Password must be at least 6 characters"));
           setIsLoading(false);
           return;
         }
@@ -82,7 +84,7 @@ export default function LoginPage() {
         } catch (signupError: any) {
           const msg = signupError.message || "";
           if (msg.includes("already registered") || msg.includes("already been registered")) {
-            toast.error("该邮箱已注册，请直接登录");
+            toast.error(text("该邮箱已注册，请直接登录", "This email is already registered. Please sign in."));
             setMode("login");
             setIsLoading(false);
             return;
@@ -93,7 +95,7 @@ export default function LoginPage() {
         if (signupResult?.error) {
           const errMsg = signupResult.error;
           if (errMsg.includes("already registered") || errMsg.includes("already been registered")) {
-            toast.error("该邮箱已注册，请直接登录");
+            toast.error(text("该邮箱已注册，请直接登录", "This email is already registered. Please sign in."));
             setMode("login");
             setIsLoading(false);
             return;
@@ -106,24 +108,24 @@ export default function LoginPage() {
           password: formData.password,
         });
         if (signInError) throw signInError;
-        if (!signInData.session) throw new Error("注册后登录失败");
+        if (!signInData.session) throw new Error(text("注册后登录失败", "Failed to sign in after registration"));
 
-        toast.success("注册成功，欢迎加入！");
+        toast.success(text("注册成功，欢迎加入！", "Registration successful. Welcome!"));
         navigate("/", { replace: true });
       }
     } catch (error: any) {
       console.error("Auth error:", error);
       const msg = error.message || "";
       if (msg.includes("Invalid login credentials") || msg.includes("invalid_credentials")) {
-        toast.error("邮箱或密码错误，请重新输入");
+        toast.error(text("邮箱或密码错误，请重新输入", "Incorrect email or password"));
       } else if (msg.includes("Email not confirmed")) {
-        toast.error("邮箱尚未验证，请联系管理员");
+        toast.error(text("邮箱尚未验证，请联系管理员", "Your email has not been verified yet"));
       } else if (msg.includes("Too many requests")) {
-        toast.error("请求过于频繁，请稍后再试");
+        toast.error(text("请求过于频繁，请稍后再试", "Too many requests. Please try again later"));
       } else if (msg.includes("fetch") || msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("网络连接失败")) {
-        toast.error("网络连接失败，请检查网络后重试");
+        toast.error(text("网络连接失败，请检查网络后重试", "Network error. Please check your connection and try again"));
       } else {
-        toast.error(msg || "操作失败，请重试");
+        toast.error(msg || text("操作失败，请重试", "Action failed. Please try again"));
       }
     } finally {
       setIsLoading(false);
@@ -134,12 +136,12 @@ export default function LoginPage() {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail.trim()) {
-      toast.error("请输入邮箱地址");
+      toast.error(text("请输入邮箱地址", "Please enter your email address"));
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(forgotEmail.trim())) {
-      toast.error("请输入有效的邮箱地址");
+      toast.error(text("请输入有效的邮箱地址", "Please enter a valid email address"));
       return;
     }
 
@@ -155,9 +157,9 @@ export default function LoginPage() {
       console.error("[找回密码] 错误:", error);
       const msg = error.message || "";
       if (msg.includes("fetch") || msg.includes("NetworkError")) {
-        toast.error("网络连接失败，请稍后再试");
+        toast.error(text("网络连接失败，请稍后再试", "Network error. Please try again later"));
       } else {
-        toast.error(msg || "发送失败，请重试");
+        toast.error(msg || text("发送失败，请重试", "Failed to send. Please try again"));
       }
     } finally {
       setIsLoading(false);
@@ -173,18 +175,36 @@ export default function LoginPage() {
   // 正在检查会话时显示加载
   if (isCheckingSession) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-[#F2F2F7] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(96,165,250,0.18),_transparent_34%),linear-gradient(180deg,_#f8fbff_0%,_#eef3ff_46%,_#f5f7fb_100%)]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-          <p className="text-sm text-gray-400">正在加载…</p>
+          <p className="text-sm text-gray-400">{text("正在加载…", "Loading...")}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-[#F2F2F7] flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(96,165,250,0.18),_transparent_34%),linear-gradient(180deg,_#f8fbff_0%,_#eef3ff_46%,_#f5f7fb_100%)] px-6 py-10">
       <div className="w-full max-w-md">
+        <div className="mb-6 flex justify-center">
+          <div className="inline-flex rounded-full border border-white/70 bg-white/80 p-1 shadow-[0_12px_28px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={() => setLanguage("zh")}
+              className={`rounded-full px-4 py-2 text-[13px] font-medium transition-all ${language === "zh" ? "bg-blue-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              中文
+            </button>
+            <button
+              type="button"
+              onClick={() => setLanguage("en")}
+              className={`rounded-full px-4 py-2 text-[13px] font-medium transition-all ${language === "en" ? "bg-blue-500 text-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              English
+            </button>
+          </div>
+        </div>
 
         {/* ── 找回密码模式 ── */}
         {mode === "forgot" ? (
@@ -193,29 +213,31 @@ export default function LoginPage() {
               <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-500 rounded-[24px] mb-5 shadow-[0_10px_40px_rgba(59,130,246,0.3)]">
                 <Hand className="w-10 h-10 text-white" />
               </div>
-              <h1 className="text-[26px] font-bold text-gray-900 mb-2 tracking-tight">找回密码</h1>
+              <h1 className="text-[26px] font-bold text-gray-900 mb-2 tracking-tight">{text("找回密码", "Reset Password")}</h1>
               <p className="text-[15px] text-gray-500">
-                {forgotEmailSent ? "请检查您的邮箱" : "输入注册邮箱，我们将发送重置链接"}
+                {forgotEmailSent ? text("请检查您的邮箱", "Check your inbox") : text("输入注册邮箱，我们将发送重置链接", "Enter your registered email and we will send a reset link")}
               </p>
             </div>
 
-            <div className="bg-white/80 backdrop-blur-xl rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white p-8">
+            <div className="rounded-[36px] border border-white/70 bg-white/84 p-8 shadow-[0_28px_80px_rgba(15,23,42,0.12)] backdrop-blur-2xl">
               {forgotEmailSent ? (
                 /* 发送成功状态 */
                 <div className="text-center py-4">
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-5">
                     <CheckCircle className="w-8 h-8 text-green-500" />
                   </div>
-                  <h3 className="text-[18px] font-semibold text-gray-900 mb-3">邮件已发送</h3>
+                  <h3 className="text-[18px] font-semibold text-gray-900 mb-3">{text("邮件已发送", "Email Sent")}</h3>
                   <p className="text-[14px] text-gray-500 mb-1 leading-relaxed">
-                    重置链接已发送至：
+                    {text("重置链接已发送至：", "A reset link has been sent to:")}
                   </p>
                   <p className="text-[14px] font-medium text-blue-600 mb-5 break-all">
                     {forgotEmail}
                   </p>
-                  <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 text-left mb-6">
+                  <div className="mb-6 rounded-[20px] border border-amber-100 bg-amber-50/90 px-4 py-3 text-left shadow-[0_12px_24px_rgba(245,158,11,0.08)]">
                     <p className="text-[13px] text-amber-700 leading-relaxed">
-                      💡 请检查收件箱和垃圾邮件文件夹。链接将在 <strong>1小时</strong>内有效，点击链接后可设置新密码。
+                      {text("请检查收件箱和垃圾邮件文件夹。链接将在 ", "Please check your inbox and spam folder. The link remains valid for ")}
+                      <strong>{text("1小时", "1 hour")}</strong>
+                      {text(" 内有效，点击链接后可设置新密码。", ". Open the link to set a new password.")}
                     </p>
                   </div>
                   <Button
@@ -223,13 +245,13 @@ export default function LoginPage() {
                     onClick={() => setForgotEmailSent(false)}
                     className="text-[14px] text-gray-500 hover:text-gray-700 mb-2 w-full"
                   >
-                    未收到？重新发送
+                    {text("未收到？重新发送", "Didn't get it? Send again")}
                   </Button>
                   <Button
                     onClick={() => switchMode("login")}
                     className="w-full h-12 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white text-[15px] font-medium"
                   >
-                    返回登录
+                    {text("返回登录", "Back to Sign In")}
                   </Button>
                 </div>
               ) : (
@@ -237,12 +259,12 @@ export default function LoginPage() {
                 <form onSubmit={handleForgotPassword} className="space-y-5">
                   <div>
                     <label className="block text-[14px] font-medium text-gray-700 mb-2 ml-1">
-                      注册邮箱
+                      {text("注册邮箱", "Registered Email")}
                     </label>
                     <div className="relative">
                       <Input
                         type="email"
-                        placeholder="请输入您的注册邮箱"
+                        placeholder={text("请输入您的注册邮箱", "Enter your registered email")}
                         value={forgotEmail}
                         onChange={(e) => setForgotEmail(e.target.value)}
                         className="h-14 rounded-2xl bg-[#F2F2F7] border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-[15px] pl-11 pr-4"
@@ -259,10 +281,10 @@ export default function LoginPage() {
                     {isLoading ? (
                       <span className="flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        发送中…
+                        {text("发送中…", "Sending...")}
                       </span>
                     ) : (
-                      "发送重置邮件"
+                      text("发送重置邮件", "Send Reset Email")
                     )}
                   </Button>
 
@@ -272,7 +294,7 @@ export default function LoginPage() {
                     className="w-full flex items-center justify-center gap-1.5 text-[14px] text-gray-500 hover:text-gray-700 transition-colors pt-1"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
-                    返回登录
+                    {text("返回登录", "Back to Sign In")}
                   </button>
                 </form>
               )}
@@ -286,13 +308,13 @@ export default function LoginPage() {
               <div className="inline-flex items-center justify-center w-24 h-24 bg-blue-500 rounded-[28px] mb-5 shadow-[0_10px_40px_rgba(59,130,246,0.3)]">
                 <Hand className="w-12 h-12 text-white" />
               </div>
-              <h1 className="text-[28px] font-bold text-gray-900 mb-2 tracking-tight">手语助手</h1>
-              <p className="text-[15px] text-gray-500">为听障人群打造的无障碍空间</p>
+              <h1 className="text-[28px] font-bold text-gray-900 mb-2 tracking-tight">{text("手语助手", "HandChat")}</h1>
+              <p className="text-[15px] text-gray-500">{text("为听障人群打造的无障碍空间", "An accessible space built for deaf and hard-of-hearing users")}</p>
             </div>
 
-            <div className="bg-white/80 backdrop-blur-xl rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white p-8">
+            <div className="rounded-[36px] border border-white/70 bg-white/84 p-8 shadow-[0_28px_80px_rgba(15,23,42,0.12)] backdrop-blur-2xl">
               {/* 登录 / 注册切换 Tab */}
-              <div className="flex mb-8 bg-[#F2F2F7] rounded-2xl p-1">
+              <div className="mb-8 flex rounded-[20px] border border-white/70 bg-slate-100/80 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
                 <button
                   type="button"
                   onClick={() => switchMode("login")}
@@ -302,7 +324,7 @@ export default function LoginPage() {
                       : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
-                  登录
+                  {text("登录", "Sign In")}
                 </button>
                 <button
                   type="button"
@@ -313,7 +335,7 @@ export default function LoginPage() {
                       : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
-                  注册
+                  {text("注册", "Sign Up")}
                 </button>
               </div>
 
@@ -322,11 +344,11 @@ export default function LoginPage() {
                 {mode === "register" && (
                   <div>
                     <label className="block text-[14px] font-medium text-gray-700 mb-2 ml-1">
-                      昵称
+                      {text("昵称", "Display Name")}
                     </label>
                     <Input
                       type="text"
-                      placeholder="请输入您的昵称"
+                      placeholder={text("请输入您的昵称", "Enter your display name")}
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="h-14 rounded-2xl bg-[#F2F2F7] border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-[15px] px-4"
@@ -337,11 +359,11 @@ export default function LoginPage() {
                 {/* 邮箱 */}
                 <div>
                   <label className="block text-[14px] font-medium text-gray-700 mb-2 ml-1">
-                    邮箱
+                    {text("邮箱", "Email")}
                   </label>
                   <Input
                     type="email"
-                    placeholder="请输入邮箱地址"
+                    placeholder={text("请输入邮箱地址", "Enter your email")}
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="h-14 rounded-2xl bg-[#F2F2F7] border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-[15px] px-4"
@@ -358,14 +380,14 @@ export default function LoginPage() {
                         onClick={() => switchMode("forgot")}
                         className="text-[13px] text-blue-500 hover:text-blue-600 font-medium transition-colors"
                       >
-                        忘记密码？
+                        {text("忘记密码？", "Forgot password?")}
                       </button>
                     )}
                   </div>
                   <div className="relative">
                     <Input
                       type={showPassword ? "text" : "password"}
-                      placeholder={mode === "login" ? "请输入密码" : "请设置密码（至少6位）"}
+                      placeholder={mode === "login" ? text("请输入密码", "Enter your password") : text("请设置密码（至少6位）", "Create a password (at least 6 characters)")}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       className="h-14 rounded-2xl bg-[#F2F2F7] border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-[15px] px-4 pr-12"
@@ -389,10 +411,10 @@ export default function LoginPage() {
                   {isLoading ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      处理中…
+                        {text("处理中…", "Processing...")}
                     </span>
                   ) : (
-                    mode === "login" ? "登录" : "注册并登录"
+                    mode === "login" ? text("登录", "Sign In") : text("注册并登录", "Create Account")
                   )}
                 </Button>
               </form>

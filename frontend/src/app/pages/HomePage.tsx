@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { motion, AnimatePresence } from "motion/react";
 import Tesseract from "tesseract.js";
 import { createHandDetector, guessSign, type HandDetector } from "../lib/handchat/recognition";
+import { useLanguage } from "../contexts/LanguageContext";
 
 interface HistoryRecord {
   id: string;
@@ -19,6 +20,7 @@ interface HistoryRecord {
 export default function HomePage() {
   const { getPageState, setPageState } = useOutletContext<PageStateContext>();
   const navigate = useNavigate();
+  const { text } = useLanguage();
   const savedState = getPageState('home') || {};
 
   const [cameraActive, setCameraActive] = useState(savedState.cameraActive || false);
@@ -417,44 +419,108 @@ export default function HomePage() {
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return "刚刚";
-    if (minutes < 60) return `${minutes}分钟前`;
-    if (hours < 24) return `${hours}小时前`;
-    return `${days}天前`;
+    if (minutes < 1) return text("刚刚", "Just now");
+    if (minutes < 60) return `${minutes}${text("分钟前", "m ago")}`;
+    if (hours < 24) return `${hours}${text("小时前", "h ago")}`;
+    return `${days}${text("天前", "d ago")}`;
   };
 
+  const featureHighlights = [
+    { label: text("识别方式", "Modes"), value: text("实时 / 拍照 / 相册", "Live / Camera / Album") },
+    { label: text("最近记录", "Records"), value: `${historyRecords.length} ${text("条", "items")}` },
+    { label: text("适用场景", "Scenes"), value: text("书籍 / 海报 / 屏幕", "Books / Posters / Screens") },
+  ];
+
+  const actionCards = [
+    {
+      key: "live",
+      title: text("实时识别", "Live Scan"),
+      description: text("即时捕捉镜头内容，适合快速扫读", "Capture content instantly for quick reading"),
+      icon: Video,
+      accentClass: "bg-purple-500/[0.08] text-purple-500",
+      onClick: startLiveRecognition,
+    },
+    {
+      key: "camera",
+      title: text("拍照识别", "Photo Scan"),
+      description: text("定格当前画面，提取更稳定的文字内容", "Freeze the current frame for more stable text extraction"),
+      icon: Camera,
+      accentClass: "bg-blue-500/[0.08] text-blue-500",
+      onClick: handleOpenCamera,
+    },
+    {
+      key: "album",
+      title: text("相册选择", "Choose from Album"),
+      description: text("导入现有图片，快速提取与放大文字", "Import an existing image to extract and enlarge text"),
+      icon: Image,
+      accentClass: "bg-emerald-500/[0.08] text-emerald-500",
+      onClick: handleUploadImage,
+    },
+  ];
+
   return (
-    <div className="min-h-screen pb-20" style={{ background: 'var(--app-background, #F2F2F7)' }}>
+    <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-xl px-4 pt-12 pb-3 shadow-sm sticky top-0 z-10 border-b border-gray-100 flex justify-center">
-        <div className="flex items-center justify-between w-full max-w-2xl">
-          <div>
-            <h1 className="text-[28px] font-bold text-gray-900 mb-0.5 tracking-tight">视觉辅助</h1>
-            <p className="text-[13px] text-gray-500">通过相机识别并放大文字</p>
+      <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-10 pb-4">
+        <div className="w-full max-w-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <h1 className="text-[30px] font-bold text-slate-900 mb-1 tracking-[-0.03em]">{text("视觉辅助", "Vision Assistance")}</h1>
+              <p className="text-[13px] text-slate-500">{text("通过相机识别、提取与放大文字内容", "Recognize, extract, and enlarge text through the camera")}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex rounded-2xl border border-white/70 bg-white/60 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+                <div className="pr-3">
+                  <p className="text-[11px] text-slate-400">{text("识别记录", "Records")}</p>
+                  <p className="text-[16px] font-semibold text-slate-900">{historyRecords.length}</p>
+                </div>
+                <div className="border-l border-slate-200/70 pl-3">
+                  <p className="text-[11px] text-slate-400">{text("当前能力", "Capabilities")}</p>
+                  <p className="text-[13px] font-medium text-slate-700">{text("文字识别与智能分析", "OCR + AI")}</p>
+                </div>
+              </div>
+              <div className="hidden md:flex items-center gap-2 rounded-2xl border border-white/70 bg-white/60 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+                <div>
+                  <p className="text-[11px] text-slate-400">{text("快速入口", "Quick Access")}</p>
+                  <p className="text-[13px] font-medium text-slate-700">{text("查看识别历史", "View History")}</p>
+                </div>
+              </div>
+              <Button
+                onClick={() => setShowHistory(true)}
+                variant="ghost"
+                size="icon"
+                className="relative h-11 w-11 rounded-2xl bg-white/72 shadow-[0_12px_30px_rgba(15,23,42,0.08)] hover:bg-white"
+              >
+                <History className="w-5 h-5 text-slate-700" />
+                {historyRecords.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-blue-500 text-[10px] font-bold text-white">
+                    {historyRecords.length}
+                  </span>
+                )}
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={() => setShowHistory(true)}
-            variant="ghost"
-            size="icon"
-            className="relative rounded-full w-10 h-10 bg-gray-50 hover:bg-gray-100"
-          >
-            <History className="w-5 h-5 text-gray-700" />
-            {historyRecords.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-                {historyRecords.length}
-              </span>
-            )}
-          </Button>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {featureHighlights.map((item) => (
+              <div
+                key={item.label}
+                className="rounded-[18px] border border-white/70 bg-white/56 px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl"
+              >
+                <p className="text-[11px] tracking-[0.12em] text-slate-400">{item.label}</p>
+                <p className="mt-1 text-[13px] font-medium leading-5 text-slate-800">{item.value}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* 主内容区 */}
-      <div className="p-3 space-y-2.5 w-full max-w-2xl mx-auto">
+      <div className="w-full max-w-2xl mx-auto space-y-4 px-4 pt-3">
         {isLiveRecognizing ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-[24px] shadow-sm overflow-hidden flex flex-col items-center p-4 border border-gray-100"
+            className="app-panel-strong app-grid-glow overflow-hidden rounded-[28px] p-4 flex flex-col items-center"
           >
             <div className="relative w-full aspect-video bg-black rounded-[16px] overflow-hidden">
               <video
@@ -469,7 +535,7 @@ export default function HomePage() {
               />
               <div className="absolute top-4 left-4 bg-black/50 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-md">
                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                实时手势识别中...
+                {text("实时手势识别中...", "Live gesture recognition...")}
               </div>
               
               {/* Overlay UI for recognized text over video */}
@@ -487,64 +553,86 @@ export default function HomePage() {
               </AnimatePresence>
             </div>
             
-            <div className="w-full mt-4 bg-gray-50 rounded-[16px] p-4 min-h-[80px] flex items-center justify-center border border-gray-100/50 text-center">
+            <div className="w-full mt-4 rounded-[20px] border border-white/70 bg-white/72 p-4 min-h-[96px] flex items-center justify-center text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
               {liveResult ? (
                 <div className="flex flex-col gap-1">
-                  <span className="text-[13px] text-gray-500">识别结果：</span>
+                  <span className="text-[13px] text-gray-500">{text("识别结果：", "Result:")}</span>
                   <span className="text-[24px] font-bold text-gray-900 leading-tight">{liveResult}</span>
                 </div>
               ) : (
-                <span className="text-[14px] text-gray-400">请在镜头前展示手势...</span>
+                <span className="text-[14px] text-gray-400">{text("请在镜头前展示手势...", "Show a gesture in front of the camera...")}</span>
               )}
             </div>
 
             <Button
               onClick={stopCamera}
-              className="mt-4 w-full h-12 bg-red-50 hover:bg-red-100 text-red-600 rounded-[14px] font-medium"
+              className="mt-4 w-full h-12 rounded-[16px] bg-red-50 text-red-600 hover:bg-red-100"
             >
               <X className="w-4 h-4 mr-2" />
-              停止识别
+              {text("停止识别", "Stop Scanning")}
             </Button>
           </motion.div>
         ) : !capturedImage ? (
           <>
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="app-panel-strong app-grid-glow overflow-hidden rounded-[28px] p-5"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="max-w-[70%]">
+                  <p className="text-[12px] font-semibold tracking-[0.16em] text-blue-500">{text("聚焦识别", "FOCUS MODE")}</p>
+                  <h2 className="mt-1 text-[22px] font-bold tracking-[-0.03em] text-slate-900">
+                    {text("更快找到文字，更轻松看清内容", "Find text faster and read content more clearly")}
+                  </h2>
+                  <p className="mt-2 text-[13px] leading-6 text-slate-500">
+                    {text("将实时识别、拍照提取与相册导入整合在一个入口中，让高频使用更直接，也让页面内容更充实。", "Combine live scan, photo capture, and album import in one place for a richer and more direct workflow.")}
+                  </p>
+                </div>
+                <div className="rounded-[22px] border border-white/70 bg-white/70 px-4 py-3 text-right shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
+                  <p className="text-[11px] tracking-[0.12em] text-slate-400">{text("智能提取", "SMART OCR")}</p>
+                  <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-slate-900">{text("文字识别", "OCR")}</p>
+                  <p className="text-[12px] text-slate-500">{text("支持复制与放大", "Supports copy and zoom")}</p>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="rounded-[18px] border border-blue-100/80 bg-blue-500/[0.06] px-3 py-3">
+                  <p className="text-[11px] text-slate-400">{text("推荐方式", "Recommended")}</p>
+                  <p className="mt-1 text-[13px] font-medium text-slate-800">{text("优先拍照识别", "Try photo scan first")}</p>
+                </div>
+                <div className="rounded-[18px] border border-purple-100/80 bg-purple-500/[0.05] px-3 py-3">
+                  <p className="text-[11px] text-slate-400">{text("适用内容", "Suitable For")}</p>
+                  <p className="mt-1 text-[13px] font-medium text-slate-800">{text("长文、海报、屏幕", "Long text, posters, screens")}</p>
+                </div>
+                <div className="rounded-[18px] border border-emerald-100/80 bg-emerald-500/[0.05] px-3 py-3">
+                  <p className="text-[11px] text-slate-400">{text("快捷操作", "Quick Actions")}</p>
+                  <p className="mt-1 text-[13px] font-medium text-slate-800">{text("保存、复制、分享", "Save, copy, share")}</p>
+                </div>
+              </div>
+            </motion.div>
+
             {/* 功能按钮 */}
-            <div className="grid grid-cols-3 gap-2.5">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={startLiveRecognition}
-                className="bg-white rounded-[16px] p-4 shadow-[0_2px_8px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgb(0,0,0,0.06)] transition-all flex flex-col items-center gap-2.5 border border-gray-100/50"
-              >
-                <div className="w-11 h-11 bg-purple-50 text-purple-500 rounded-[14px] flex items-center justify-center">
-                  <Video className="w-5 h-5" />
-                </div>
-                <span className="text-[13px] font-medium text-gray-800">实时识别</span>
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleOpenCamera}
-                className="bg-white rounded-[16px] p-4 shadow-[0_2px_8px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgb(0,0,0,0.06)] transition-all flex flex-col items-center gap-2.5 border border-gray-100/50"
-              >
-                <div className="w-11 h-11 bg-blue-50 text-blue-500 rounded-[14px] flex items-center justify-center">
-                  <Camera className="w-5 h-5" />
-                </div>
-                <span className="text-[13px] font-medium text-gray-800">拍照识别</span>
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleUploadImage}
-                className="bg-white rounded-[16px] p-4 shadow-[0_2px_8px_rgb(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgb(0,0,0,0.06)] transition-all flex flex-col items-center gap-2.5 border border-gray-100/50"
-              >
-                <div className="w-11 h-11 bg-green-50 text-green-500 rounded-[14px] flex items-center justify-center">
-                  <Image className="w-5 h-5" />
-                </div>
-                <span className="text-[13px] font-medium text-gray-800">相册选择</span>
-              </motion.button>
+            <div className="grid grid-cols-3 gap-3">
+              {actionCards.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <motion.button
+                    key={card.key}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={card.onClick}
+                    className="app-panel app-grid-glow rounded-[24px] p-4 text-left transition-all hover:-translate-y-1"
+                  >
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-[16px] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ${card.accentClass}`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="mt-4">
+                      <p className="text-[14px] font-semibold text-slate-900">{card.title}</p>
+                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{card.description}</p>
+                    </div>
+                  </motion.button>
+                );
+              })}
             </div>
 
             <input
@@ -569,67 +657,127 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white rounded-[16px] p-3.5 shadow-[0_2px_8px_rgb(0,0,0,0.03)] border border-gray-100/50"
+              className="app-panel rounded-[24px] p-5"
             >
-              <div className="flex items-start gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-blue-50/80 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-blue-500/[0.08]">
                   <ScanText className="w-3.5 h-3.5 text-blue-500" />
                 </div>
-                <div>
-                  <h3 className="text-[14px] font-semibold text-gray-900 mb-1">使用说明</h3>
-                  <ul className="text-[12px] text-gray-500 space-y-0.5 leading-relaxed">
-                    <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-gray-300"></div>拍照或选择包含文字的图片</li>
-                    <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-gray-300"></div>系统自动识别并提取文字内容</li>
-                    <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-gray-300"></div>支持文字放大、复制和分享</li>
-                    <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-gray-300"></div>适用于书籍、海报、屏幕等场景</li>
-                  </ul>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="mb-1 text-[15px] font-semibold text-slate-900">{text("使用说明", "How It Works")}</h3>
+                      <p className="text-[12px] text-slate-500">{text("更适合高频操作的紧凑型识别工作区", "A compact recognition workspace designed for frequent use")}</p>
+                    </div>
+                    <div className="rounded-full bg-blue-500/[0.08] px-3 py-1 text-[11px] font-medium text-blue-600">
+                      {text("4 步完成识别", "4 steps")}
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
+                      <p className="text-[12px] font-medium text-slate-900">{text("1. 导入图片", "1. Import an image")}</p>
+                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{text("拍照或从相册选择包含文字的图片", "Take a photo or choose an image that contains text")}</p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
+                      <p className="text-[12px] font-medium text-slate-900">{text("2. 自动提取", "2. Extract automatically")}</p>
+                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{text("系统自动识别并提取清晰的文字内容", "The app recognizes and extracts clear text automatically")}</p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
+                      <p className="text-[12px] font-medium text-slate-900">{text("3. 快速处理", "3. Process quickly")}</p>
+                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{text("支持文字放大、复制与分享操作", "Zoom, copy, and share the extracted result")}</p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
+                      <p className="text-[12px] font-medium text-slate-900">{text("4. 场景覆盖", "4. Flexible scenes")}</p>
+                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{text("适用于书籍、海报、屏幕等内容读取", "Works well for books, posters, and screens")}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
 
             {/* 快速访问历史 */}
-            {historyRecords.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-              >
-                <div className="flex items-center justify-between mb-2.5 px-1">
-                  <h2 className="text-[16px] font-bold text-gray-900 tracking-tight">最近记录</h2>
-                  <button
-                    onClick={() => setShowHistory(true)}
-                    className="text-[14px] text-blue-500 font-medium hover:text-blue-600 transition-colors"
-                  >
-                    查看全部
-                  </button>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <div className="mb-2.5 flex items-center justify-between px-1">
+                <div>
+                  <h2 className="text-[16px] font-bold tracking-tight text-slate-900">{text("最近记录", "Recent Records")}</h2>
+                  <p className="mt-0.5 text-[12px] text-slate-400">{text("最近提取的内容会在这里快速查看", "Recently extracted content appears here for quick review")}</p>
                 </div>
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className="rounded-full bg-blue-500/[0.08] px-3 py-1.5 text-[13px] font-medium text-blue-500 transition-colors hover:bg-blue-500/[0.12] hover:text-blue-600"
+                >
+                  {text("查看全部", "View All")}
+                </button>
+              </div>
+              {historyRecords.length > 0 ? (
                 <div className="space-y-2">
                   {historyRecords.slice(0, 3).map((record) => (
                     <motion.div
                       key={record.id}
                       whileTap={{ scale: 0.99 }}
                       onClick={() => setSelectedHistory(record)}
-                      className="bg-white rounded-[14px] p-3 shadow-[0_1px_4px_rgb(0,0,0,0.03)] flex items-center gap-3 cursor-pointer hover:shadow-[0_2px_8px_rgb(0,0,0,0.05)] transition-all border border-gray-50/50"
+                      className="app-panel rounded-[20px] p-3.5 flex items-center gap-3 cursor-pointer transition-all hover:-translate-y-0.5"
                     >
                       <img
                         src={record.image}
                         alt="历史记录"
-                        className="w-12 h-12 bg-gray-50 rounded-[10px] flex-shrink-0 object-cover border border-gray-100/50"
+                        className="h-14 w-14 flex-shrink-0 rounded-[14px] border border-gray-100/50 bg-gray-50 object-cover"
                       />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-medium text-gray-900 truncate leading-snug">
-                          {record.text.split('\n')[0] || "已识别的文字内容..."}
-                        </p>
-                        <p className="text-[12px] text-gray-400 mt-0.5">
-                          {formatTime(record.timestamp)}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium tracking-[0.08em] text-slate-500">
+                            {text("文字识别", "OCR")}
+                          </span>
+                          <span className="text-[11px] text-slate-400">{formatTime(record.timestamp)}</span>
+                        </div>
+                        <p className="mt-2 truncate text-[14px] font-medium leading-snug text-slate-900">
+                          {record.text.split('\n')[0] || text("已识别的文字内容...", "Recognized text content...")}
                         </p>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-gray-300 flex-shrink-0" />
+                      <ChevronRight className="h-5 w-5 flex-shrink-0 text-gray-300" />
                     </motion.div>
                   ))}
                 </div>
-              </motion.div>
-            )}
+              ) : (
+                <div className="app-panel-strong app-grid-glow overflow-hidden rounded-[24px] p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-blue-500/[0.08] text-blue-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                        <History className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-[15px] font-semibold text-slate-900">{text("还没有识别记录", "No records yet")}</h3>
+                        <p className="mt-1 max-w-md text-[12px] leading-6 text-slate-500">
+                          {text("完成一次拍照识别、实时识别或相册导入后，结果会自动沉淀到这里，方便你快速回看与继续处理。", "After your first scan, results will appear here so you can revisit and continue processing them quickly.")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex min-w-[132px] flex-col items-center justify-center rounded-[18px] border border-white/70 bg-white/72 px-3 py-2 text-center shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                      <p className="text-[11px] text-slate-400">{text("当前状态", "Status")}</p>
+                      <p className="mt-1 text-[14px] font-semibold text-slate-800">{text("等待首次识别", "Waiting for your first scan")}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-3">
+                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
+                      <p className="text-[11px] text-slate-400">{text("推荐", "Recommended")}</p>
+                      <p className="mt-1 text-[13px] font-medium text-slate-800">{text("先试拍照识别", "Start with photo scan")}</p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
+                      <p className="text-[11px] text-slate-400">优势</p>
+                      <p className="mt-1 text-[13px] font-medium text-slate-800">结果更稳定清晰</p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
+                      <p className="text-[11px] text-slate-400">后续</p>
+                      <p className="mt-1 text-[13px] font-medium text-slate-800">支持复制与分享</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           </>
         ) : (
           <>
@@ -637,7 +785,7 @@ export default function HomePage() {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white/90 backdrop-blur-sm rounded-[28px] shadow-xl overflow-hidden"
+              className="app-panel-strong rounded-[30px] overflow-hidden"
             >
               <img
                 src={capturedImage}
@@ -650,7 +798,7 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white/90 backdrop-blur-sm rounded-[28px] p-8 shadow-xl"
+              className="app-panel-strong rounded-[30px] p-8"
             >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
@@ -690,7 +838,7 @@ export default function HomePage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="p-6 bg-blue-50/50 rounded-[20px]">
+                  <div className="rounded-[22px] border border-blue-100/80 bg-blue-500/[0.06] p-6">
                     <p className="text-gray-800 text-base whitespace-pre-line leading-relaxed">
                       {ocrResult}
                     </p>
@@ -714,13 +862,13 @@ export default function HomePage() {
                   setOcrResult("");
                 }}
                 variant="outline"
-                className="flex-1 h-14 rounded-[20px] bg-white/90 backdrop-blur-sm hover:bg-white text-base font-medium"
+                className="flex-1 h-14 rounded-[20px] bg-white/80 text-base font-medium"
               >
                 重新识别
               </Button>
               <Button
                 onClick={handleSaveResult}
-                className="flex-1 h-14 bg-blue-500 hover:bg-blue-600 rounded-[20px] shadow-xl text-base font-medium"
+                className="flex-1 h-14 rounded-[20px] text-base font-medium"
               >
                 保存结果
               </Button>
@@ -731,7 +879,7 @@ export default function HomePage() {
 
       {/* 识别模式选择对话框 */}
       <Dialog open={showModeDialog} onOpenChange={setShowModeDialog}>
-        <DialogContent className="max-w-xs rounded-[28px] p-6 text-center">
+        <DialogContent className="max-w-xs rounded-[30px] border-white/70 bg-white/88 p-6 text-center shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold mb-2">选择识别模式</DialogTitle>
             <DialogDescription className="text-[14px] text-gray-500 mb-6">
@@ -759,7 +907,7 @@ export default function HomePage() {
 
       {/* 历史记录对话框 */}
       <Dialog open={showHistory} onOpenChange={setShowHistory}>
-        <DialogContent className="max-w-lg rounded-[32px] p-8 max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-lg rounded-[32px] border-white/70 bg-white/88 p-8 max-h-[80vh] overflow-y-auto shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">识别历史</DialogTitle>
             <DialogDescription className="text-sm text-gray-500">查看您之前的文字识别记录</DialogDescription>
@@ -774,7 +922,7 @@ export default function HomePage() {
               historyRecords.map((record) => (
                 <div
                   key={record.id}
-                  className="bg-gray-50 rounded-[20px] p-5 flex gap-4"
+                  className="rounded-[22px] border border-white/70 bg-slate-50/80 p-5 flex gap-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]"
                 >
                   <img
                     src={record.image}
@@ -806,7 +954,7 @@ export default function HomePage() {
 
       {/* 历史详情对话框 */}
       <Dialog open={selectedHistory !== null} onOpenChange={() => setSelectedHistory(null)}>
-        <DialogContent className="max-w-lg rounded-[32px] p-8">
+        <DialogContent className="max-w-lg rounded-[32px] border-white/70 bg-white/88 p-8 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">识别详情</DialogTitle>
             <DialogDescription className="text-sm text-gray-500">查看完整的识别内容</DialogDescription>
@@ -818,7 +966,7 @@ export default function HomePage() {
                 alt="详情"
                 className="w-full h-56 rounded-[20px] object-cover"
               />
-              <div className="p-6 bg-gray-50 rounded-[20px]">
+              <div className="rounded-[22px] border border-white/70 bg-slate-50/80 p-6">
                 <p className="text-gray-800 text-base whitespace-pre-line leading-relaxed">
                   {selectedHistory.text}
                 </p>

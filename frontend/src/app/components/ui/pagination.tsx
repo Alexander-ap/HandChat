@@ -7,6 +7,7 @@ import {
 
 import { cn } from "./utils";
 import { Button, buttonVariants } from "./button";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -69,15 +70,16 @@ function PaginationPrevious({
   className,
   ...props
 }: React.ComponentProps<typeof PaginationLink>) {
+  const { text } = useLanguage();
   return (
     <PaginationLink
-      aria-label="Go to previous page"
+      aria-label={text("前往上一页", "Go to previous page")}
       size="default"
       className={cn("gap-1 px-2.5 sm:pl-2.5", className)}
       {...props}
     >
       <ChevronLeftIcon />
-      <span className="hidden sm:block">Previous</span>
+      <span className="hidden sm:block">{text("上一页", "Previous")}</span>
     </PaginationLink>
   );
 }
@@ -86,14 +88,15 @@ function PaginationNext({
   className,
   ...props
 }: React.ComponentProps<typeof PaginationLink>) {
+  const { text } = useLanguage();
   return (
     <PaginationLink
-      aria-label="Go to next page"
+      aria-label={text("前往下一页", "Go to next page")}
       size="default"
       className={cn("gap-1 px-2.5 sm:pr-2.5", className)}
       {...props}
     >
-      <span className="hidden sm:block">Next</span>
+      <span className="hidden sm:block">{text("下一页", "Next")}</span>
       <ChevronRightIcon />
     </PaginationLink>
   );
@@ -103,6 +106,7 @@ function PaginationEllipsis({
   className,
   ...props
 }: React.ComponentProps<"span">) {
+  const { text } = useLanguage();
   return (
     <span
       aria-hidden
@@ -111,7 +115,7 @@ function PaginationEllipsis({
       {...props}
     >
       <MoreHorizontalIcon className="size-4" />
-      <span className="sr-only">More pages</span>
+      <span className="sr-only">{text("更多页面", "More pages")}</span>
     </span>
   );
 }

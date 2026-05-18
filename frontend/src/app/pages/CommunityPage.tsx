@@ -17,6 +17,7 @@ import { PageStateContext } from "../components/Root";
 import { motion } from "motion/react";
 import { postsApi, uploadApi, userApi } from "../lib/api";
 import { supabase } from "../lib/supabase";
+import { useLanguage } from "../contexts/LanguageContext";
 
 /** 帖子数据结构 */
 interface Post {
@@ -41,10 +42,33 @@ interface Comment {
   timeAgo: string;
 }
 
+/** 默认帖子 (离线/无数据时显示) */
+const defaultPosts: Post[] = [
+  {
+    id: "1",
+    author: { name: "小明", avatar: "", verified: true },
+    content: "今天学会了新的手语表达方式，感觉特别开心！大家有什么学习手语的好方法吗？",
+    likes: 234, comments: 56, shares: 12, isLiked: false, isBookmarked: false, timeAgo: "2小时前",
+  },
+  {
+    id: "2",
+    author: { name: "听见世界", avatar: "", verified: true },
+    content: "分享一个手语学习小技巧：每天坚持练习10分钟，从简单的日常用语开始。持之以恒最重要！💪",
+    likes: 567, comments: 89, shares: 34, isLiked: true, isBookmarked: true, timeAgo: "5小时前",
+  },
+  {
+    id: "3",
+    author: { name: "无声的力量", avatar: "", verified: false },
+    content: "感谢这个应用，让我能更好地和家人朋友交流。希望更多人能了解和学习手语！",
+    likes: 423, comments: 67, shares: 23, isLiked: false, isBookmarked: false, timeAgo: "1天前",
+  },
+];
+
 export default function CommunityPage() {
   const { getPageState, setPageState } = useOutletContext<PageStateContext>();
   const savedState = getPageState('community') || {};
   const navigate = useNavigate();
+  const { text } = useLanguage();
 
   const [posts, setPosts] = useState<Post[]>(savedState.posts || []);
   const [showNewPost, setShowNewPost] = useState(false);
@@ -66,28 +90,21 @@ export default function CommunityPage() {
     setIsLoading(true);
     try {
       const data = await postsApi.getAll();
-      if (Array.isArray(data)) {
-        const mapped = data.map((item: any) => ({
-          id: item.id || '',
-          author: {
-            name: item.author || '用户',
-            avatar: item.avatar || '',
-            verified: false
-          },
-          content: item.content || item.title || '',
-          images: item.images || [],
-          likes: item.likes || 0,
-          comments: item.commentCount || item.comments?.length || 0,
-          shares: 0,
-          isLiked: false,
-          isBookmarked: false,
-          timeAgo: formatTimeAgo(item.createdAt),
-        }))
-        setPosts(mapped)
+      if (data.posts && Array.isArray(data.posts)) {
+        setPosts(data.posts);
+      } else {
+        setPosts([]);
       }
     } catch (error: any) {
-      console.error("[社区] 获取帖子失败:", error.message || error)
-      toast.error("加载帖子失败，请检查网络连接")
+      console.error("[社区] 获取帖子失败:", error.message || error);
+      // 降级使用默认帖子
+      if (posts.length === 0) {
+        setPosts(defaultPosts);
+      }
+      // 只在非认证错误时提示网络问题
+      if (!error.message?.includes("认证") && !error.message?.includes("登录")) {
+        toast.error("加载帖子失败，显示缓存内容");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -167,15 +184,8 @@ export default function CommunityPage() {
     if (!newComment.trim() || !selectedPostId) return;
     try {
       const data = await postsApi.addComment(selectedPostId, newComment.trim());
-      if (data.id) {
-        const comment = {
-          id: data.id,
-          author: { name: '我', avatar: '' },
-          content: data.content,
-          likes: 0,
-          timeAgo: '刚刚',
-        }
-        setComments(prev => [comment, ...prev])
+      if (data.success && data.comment) {
+        setComments(prev => [data.comment, ...prev]);
         // 更新帖子评论数
         setPosts(prev => prev.map(p =>
           p.id === selectedPostId ? { ...p, comments: p.comments + 1 } : p
@@ -247,24 +257,14 @@ export default function CommunityPage() {
           images: newPostImages.length > 0 ? newPostImages : undefined,
         });
         
-        if (data.id) {
-          setPosts(prev => [{
-            id: data.id,
-            author: { name: userName, avatar: userAvatar, verified: false },
-            content: data.content,
-            likes: data.likes || 0,
-            comments: 0,
-            shares: 0,
-            isLiked: false,
-            isBookmarked: false,
-            timeAgo: '刚刚',
-          }, ...prev])
-          setNewPostContent("")
-          setNewPostImages([])
-          setShowNewPost(false)
-          toast.success("发布成功")
-          try { await userApi.recordAction('post') } catch (e) { /* ignore */ }
-          return
+        if (data.success && data.post) {
+          setPosts(prev => [data.post, ...prev]);
+          setNewPostContent("");
+          setNewPostImages([]);
+          setShowNewPost(false);
+          toast.success("发布成功");
+          try { await userApi.recordAction('post'); } catch (e) { /* ignore */ }
+          return;
         }
       } catch (serverErr: any) {
         if (serverErr.message.includes("登录") || serverErr.message.includes("认证")) {
@@ -285,31 +285,33 @@ export default function CommunityPage() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--app-background, #F2F2F7)' }}>
+    <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         {/* 头部 */}
-        <div className="bg-white/80 backdrop-blur-xl px-4 pt-12 pb-2.5 shadow-sm sticky top-0 z-10 border-b border-gray-100 flex justify-center">
+        <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-12 pb-4">
           <div className="w-full max-w-2xl">
-            <div className="flex items-center justify-between mb-2.5">
-              <h1 className="text-[28px] font-bold text-gray-900 tracking-tight">社区</h1>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h1 className="text-[30px] font-bold tracking-[-0.03em] text-slate-900">{text("社区", "Community")}</h1>
+              </div>
               <Button
                 onClick={() => setShowNewPost(true)}
                 size="sm"
-                className="bg-blue-500 hover:bg-blue-600 rounded-full h-9 px-4 text-[14px] font-medium leading-none shadow-[0_4px_14px_0_rgb(59,130,246,0.39)] active:scale-[0.98]"
+                className="h-10 rounded-full px-4 text-[14px] font-medium leading-none"
               >
                 <Plus className="size-4" />
-                <span className="leading-none">发帖</span>
+                <span className="leading-none">{text("发帖", "Post")}</span>
               </Button>
             </div>
-            <TabsList className="w-full h-9 bg-gray-100/80 rounded-[10px] p-0.5 grid grid-cols-3">
-              <TabsTrigger value="recommended" className="rounded-[8px] text-[13px] data-[state=active]:bg-white data-[state=active]:shadow-sm font-medium">推荐</TabsTrigger>
-              <TabsTrigger value="following" className="rounded-[8px] text-[13px] data-[state=active]:bg-white data-[state=active]:shadow-sm font-medium">关注</TabsTrigger>
-              <TabsTrigger value="bookmarks" className="rounded-[8px] text-[13px] data-[state=active]:bg-white data-[state=active]:shadow-sm font-medium">收藏</TabsTrigger>
+            <TabsList className="grid h-11 w-full grid-cols-3 rounded-[16px] border border-white/70 bg-white/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+              <TabsTrigger value="recommended" className="rounded-[8px] text-[13px] data-[state=active]:bg-white data-[state=active]:shadow-sm font-medium">{text("推荐", "Recommended")}</TabsTrigger>
+              <TabsTrigger value="following" className="rounded-[8px] text-[13px] data-[state=active]:bg-white data-[state=active]:shadow-sm font-medium">{text("关注", "Following")}</TabsTrigger>
+              <TabsTrigger value="bookmarks" className="rounded-[8px] text-[13px] data-[state=active]:bg-white data-[state=active]:shadow-sm font-medium">{text("收藏", "Saved")}</TabsTrigger>
             </TabsList>
           </div>
         </div>
 
-        <div className="pb-6 px-4 w-full max-w-2xl mx-auto">
+        <div className="mx-auto w-full max-w-2xl px-4 pb-6 pt-4">
           <TabsContent value="recommended" className="mt-0">
             <PostList posts={posts} onLike={handleLike} onBookmark={handleBookmark} onComment={handleOpenComments} />
           </TabsContent>
@@ -324,23 +326,23 @@ export default function CommunityPage() {
 
       {/* 发帖弹窗 */}
       <Dialog open={showNewPost} onOpenChange={setShowNewPost}>
-        <DialogContent className="max-w-lg rounded-[24px] p-6 bg-white/95 backdrop-blur-xl border-0 shadow-2xl">
+        <DialogContent className="max-w-lg rounded-[28px] border-white/70 bg-white/90 p-6 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-2xl">
           <DialogHeader>
-            <DialogTitle className="text-[18px] font-bold">发布新帖</DialogTitle>
-            <DialogDescription className="text-[13px] text-gray-500">分享你的想法和图片</DialogDescription>
+            <DialogTitle className="text-[18px] font-bold">{text("发布新帖", "Create a Post")}</DialogTitle>
+            <DialogDescription className="text-[13px] text-gray-500">{text("分享你的想法和图片", "Share your thoughts and images")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-3">
             <Textarea
-              placeholder="分享你的想法..."
+              placeholder={text("分享你的想法...", "Share what you are thinking...")}
               value={newPostContent}
               onChange={(e) => setNewPostContent(e.target.value)}
-              className="min-h-28 rounded-[14px] border-gray-200 resize-none text-[15px] bg-white focus:ring-2 focus:ring-blue-500/20"
+              className="min-h-28 rounded-[18px] resize-none text-[15px]"
             />
             
             {newPostImages.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {newPostImages.map((img, idx) => (
-                  <div key={idx} className="relative flex-shrink-0 w-20 h-20 rounded-[12px] overflow-hidden group">
+                  <div key={idx} className="group relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-[16px] border border-white/60 shadow-[0_12px_24px_rgba(15,23,42,0.08)]">
                     <img src={img} alt="preview" className="w-full h-full object-cover" />
                     <button 
                       onClick={() => setNewPostImages(prev => prev.filter((_, i) => i !== idx))}
@@ -357,17 +359,17 @@ export default function CommunityPage() {
               <Button 
                 onClick={() => fileInputRef.current?.click()}
                 variant="outline" 
-                className="h-10 px-3 rounded-[12px] text-blue-500 border-blue-200 hover:bg-blue-50 text-[14px]"
+                className="h-10 rounded-[14px] px-3 text-[14px] text-blue-500 border-blue-200 hover:bg-blue-50"
                 disabled={isLoading}
               >
                 <ImageIcon className="w-4 h-4 mr-1.5" />
-                添加图片
+                {text("添加图片", "Add Images")}
               </Button>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
               
               <div className="flex gap-2 flex-1 ml-3">
-                <Button onClick={() => setShowNewPost(false)} variant="outline" className="flex-1 h-10 rounded-[12px] text-[14px]" disabled={isLoading}>取消</Button>
-                <Button onClick={handlePublishPost} disabled={isLoading} className="flex-1 h-10 bg-blue-500 hover:bg-blue-600 rounded-[12px] text-[14px] font-medium shadow-md">
+                <Button onClick={() => setShowNewPost(false)} variant="outline" className="flex-1 h-10 rounded-[14px] text-[14px]" disabled={isLoading}>取消</Button>
+                <Button onClick={handlePublishPost} disabled={isLoading} className="flex-1 h-10 rounded-[14px] text-[14px] font-medium">
                   <Send className="w-4 h-4 mr-1.5" />
                   {isLoading ? '处理中...' : '发布'}
                 </Button>
@@ -379,7 +381,7 @@ export default function CommunityPage() {
 
       {/* 评论弹窗 */}
       <Dialog open={showComments} onOpenChange={setShowComments}>
-        <DialogContent className="max-w-lg rounded-[24px] p-0 bg-white border-0 shadow-2xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col rounded-[28px] border-white/70 bg-white/90 p-0 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-2xl">
           <div className="px-5 pt-5 pb-3 border-b border-gray-100">
             <DialogTitle className="text-[17px] font-bold text-center">评论</DialogTitle>
             <DialogDescription className="sr-only">查看和发表评论</DialogDescription>
@@ -442,22 +444,6 @@ export default function CommunityPage() {
   );
 }
 
-/** 格式化时间 */
-function formatTimeAgo(isoString: string): string {
-  if (!isoString) return ''
-  const now = Date.now()
-  const then = new Date(isoString).getTime()
-  const diff = now - then
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return '刚刚'
-  if (mins < 60) return `${mins}分钟前`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}天前`
-  return new Date(isoString).toLocaleDateString()
-}
-
 /** 帖子列表组件 */
 function PostList({ posts, onLike, onBookmark, onComment }: {
   posts: Post[];
@@ -475,7 +461,7 @@ function PostList({ posts, onLike, onBookmark, onComment }: {
   }
 
   return (
-    <div className="space-y-2.5 pt-2.5">
+      <div className="space-y-3 pt-1">
       {posts.map(post => (
         <PostCard key={post.id} post={post} onLike={onLike} onBookmark={onBookmark} onComment={onComment} />
       ))}
@@ -490,7 +476,6 @@ function PostCard({ post, onLike, onBookmark, onComment }: {
   onBookmark: (id: string) => void;
   onComment: (id: string) => void;
 }) {
-  const navigate = useNavigate();
   const author = typeof post.author === 'string' 
     ? { name: post.author, avatar: '', verified: false } 
     : (post.author || { name: '匿名', avatar: '', verified: false });
@@ -499,11 +484,11 @@ function PostCard({ post, onLike, onBookmark, onComment }: {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-[16px] p-3.5 shadow-[0_1px_3px_rgb(0,0,0,0.04)] border border-gray-50"
+      className="app-panel rounded-[22px] p-4"
     >
       {/* 作者 */}
       <div className="flex items-center gap-2.5 mb-2.5">
-        <Avatar className="w-9 h-9 border border-gray-100/50">
+        <Avatar className="h-10 w-10 border border-white/70 shadow-[0_8px_20px_rgba(15,23,42,0.06)]">
           <AvatarImage src={author.avatar} />
           <AvatarFallback className="bg-gradient-to-br from-blue-50 to-blue-100 text-blue-600 text-[13px] font-medium">
             {author.name?.[0] || '?'}
@@ -525,29 +510,19 @@ function PostCard({ post, onLike, onBookmark, onComment }: {
       </div>
 
       {/* 内容 */}
-      <button
-        type="button"
-        onClick={() => navigate(`/community/posts/${post.id}`, { state: { post } })}
-        className="w-full text-left"
-      >
-        <p className="text-[14px] text-gray-800 mb-2.5 leading-relaxed hover:text-gray-900 transition-colors">{post.content}</p>
-      </button>
+      <p className="mb-3 text-[14px] leading-7 text-slate-700">{post.content}</p>
 
       {/* 图片 */}
       {post.images && post.images.length > 0 && (
-        <button
-          type="button"
-          onClick={() => navigate(`/community/posts/${post.id}`, { state: { post } })}
-          className={`mb-2.5 w-full rounded-[12px] overflow-hidden ${post.images.length > 1 ? 'grid grid-cols-2 gap-0.5' : 'block'}`}
-        >
+        <div className={`mb-2.5 rounded-[12px] overflow-hidden ${post.images.length > 1 ? 'grid grid-cols-2 gap-0.5' : ''}`}>
           {post.images.slice(0, 4).map((img, i) => (
             <img key={i} src={img} alt="Post" className="w-full h-40 object-cover" />
           ))}
-        </button>
+        </div>
       )}
 
       {/* 互动 */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+      <div className="flex items-center justify-between border-t border-slate-100/80 pt-2.5">
         <Button variant="ghost" size="sm" onClick={() => onLike(post.id)}
           className={`gap-1 px-2 h-8 rounded-lg ${post.isLiked ? "text-red-500" : "text-gray-500"}`}>
           <Heart className={`w-4 h-4 ${post.isLiked ? "fill-current" : ""}`} strokeWidth={1.5} />

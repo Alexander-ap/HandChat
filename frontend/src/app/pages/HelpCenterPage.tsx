@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, ChevronRight, Search } from "lucide-react";
+import { ArrowLeft, Search, LifeBuoy } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
+import { useLanguage } from "../contexts/LanguageContext";
 
 const helpCategories = [
   {
@@ -42,48 +43,97 @@ const helpCategories = [
 
 export default function HelpCenterPage() {
   const navigate = useNavigate();
+  const { text } = useLanguage();
   const [searchQuery, setSearchQuery] = useState("");
+  const visibleCategories = helpCategories
+    .map((category) => ({
+      ...category,
+      items: category.items.filter(
+        (item) =>
+          !searchQuery.trim() ||
+          item.q.includes(searchQuery.trim()) ||
+          item.a.includes(searchQuery.trim())
+      ),
+    }))
+    .filter((category) => category.items.length > 0);
 
   return (
     <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
-      {/* iOS Style Header */}
-      <div className="bg-white/80 backdrop-blur-md px-4 pt-14 pb-4 shadow-sm sticky top-0 z-50 flex items-center justify-center border-b border-gray-100">
-        <div className="w-full max-w-2xl flex items-center justify-between relative">
+      <div className="app-topbar sticky top-0 z-50 flex items-center justify-center px-4 pt-10 pb-4">
+        <div className="relative w-full max-w-2xl flex items-center justify-between">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => navigate("/profile")}
-            className="text-blue-500 hover:text-blue-600 hover:bg-transparent px-0 font-medium text-[17px] absolute left-0"
+            className="absolute left-0 rounded-full px-0 text-[16px] font-medium text-blue-500 hover:bg-transparent hover:text-blue-600"
           >
             <ArrowLeft className="w-5 h-5 mr-1" />
             返回
           </Button>
-          <h1 className="text-[17px] font-semibold text-black mx-auto">帮助中心</h1>
+          <div className="mx-auto text-center">
+            <h1 className="text-[17px] font-semibold text-slate-900">帮助中心</h1>
+          </div>
         </div>
       </div>
 
-      <div className="px-4 py-3 space-y-3 w-full max-w-2xl mx-auto">
-        {/* 搜索框 */}
-        <div className="relative">
+      <div className="w-full max-w-2xl mx-auto space-y-4 px-4 pt-3">
+        <div className="app-panel-strong app-grid-glow rounded-[28px] p-5">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-blue-500/[0.08] text-blue-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+              <LifeBuoy className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[12px] font-semibold tracking-[0.16em] text-blue-500">{text("指南与支持", "GUIDE & SUPPORT")}</p>
+              <h2 className="mt-1 text-[22px] font-bold tracking-[-0.03em] text-slate-900">快速查找常见功能与问题解答</h2>
+              <p className="mt-2 text-[13px] leading-6 text-slate-500">
+                覆盖 OCR、手语交互、环境音感知、隐私保护等高频问题，方便你直接检索。
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="rounded-[18px] border border-white/70 bg-white/72 px-3 py-3">
+              <p className="text-[11px] text-slate-400">功能主题</p>
+              <p className="mt-1 text-[13px] font-medium text-slate-800">{helpCategories.length} 类</p>
+            </div>
+            <div className="rounded-[18px] border border-white/70 bg-white/72 px-3 py-3">
+              <p className="text-[11px] text-slate-400">常见问答</p>
+              <p className="mt-1 text-[13px] font-medium text-slate-800">
+                {helpCategories.reduce((total, category) => total + category.items.length, 0)} 条
+              </p>
+            </div>
+            <div className="rounded-[18px] border border-white/70 bg-white/72 px-3 py-3">
+              <p className="text-[11px] text-slate-400">支持方式</p>
+              <p className="mt-1 text-[13px] font-medium text-slate-800">搜索与展开</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="app-panel rounded-[24px] p-4">
+          <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜索帮助内容..."
-            className="pl-9 h-9 rounded-[10px] bg-white border-none shadow-sm text-[14px]"
+            className="h-11 rounded-[14px] border-none bg-white/80 pl-9 text-[14px] shadow-none"
           />
+          </div>
         </div>
 
-        {helpCategories.map((category, idx) => (
-          <div key={idx} className="bg-white rounded-[14px] p-3.5 shadow-sm">
-            <h2 className="text-[15px] font-bold text-gray-900 mb-1.5">{category.title}</h2>
-            <Accordion type="single" collapsible className="space-y-0.5">
+        {visibleCategories.map((category, idx) => (
+          <div key={idx} className="app-panel rounded-[24px] p-4">
+            <h2 className="mb-2 text-[15px] font-bold text-slate-900">{category.title}</h2>
+            <Accordion type="single" collapsible className="space-y-1">
               {category.items.map((item, itemIdx) => (
-                <AccordionItem key={itemIdx} value={`${idx}-${itemIdx}`} className="border-none">
-                  <AccordionTrigger className="text-left text-[14px] font-medium text-gray-800 hover:text-blue-500 py-3">
+                <AccordionItem
+                  key={itemIdx}
+                  value={`${idx}-${itemIdx}`}
+                  className="rounded-[18px] border border-white/70 bg-white/72 px-4"
+                >
+                  <AccordionTrigger className="py-3 text-left text-[14px] font-medium text-slate-800 hover:text-blue-500">
                     {item.q}
                   </AccordionTrigger>
-                  <AccordionContent className="text-[14px] text-gray-600 leading-relaxed pb-3">
+                  <AccordionContent className="pb-3 text-[14px] leading-relaxed text-slate-600">
                     {item.a}
                   </AccordionContent>
                 </AccordionItem>
@@ -92,13 +142,21 @@ export default function HelpCenterPage() {
           </div>
         ))}
 
-        {/* 联系我们 */}
-        <div className="bg-blue-50 rounded-[14px] p-5 text-center">
-          <h3 className="text-[15px] font-bold text-gray-900 mb-2">还有其他问题？</h3>
-          <p className="text-[14px] text-gray-600 mb-4">
+        {visibleCategories.length === 0 && (
+          <div className="app-panel-strong rounded-[24px] p-5 text-center">
+            <h3 className="text-[16px] font-semibold text-slate-900">没有找到匹配内容</h3>
+            <p className="mt-2 text-[13px] leading-6 text-slate-500">
+              换个关键词试试，或直接浏览下面的帮助主题。
+            </p>
+          </div>
+        )}
+
+        <div className="app-panel-strong app-grid-glow rounded-[28px] p-5 text-center">
+          <h3 className="mb-2 text-[15px] font-bold text-slate-900">还有其他问题？</h3>
+          <p className="mb-4 text-[14px] text-slate-600">
             我们随时为您提供帮助
           </p>
-          <Button className="bg-blue-500 hover:bg-blue-600 rounded-[12px] h-10 px-6 text-[14px]">
+          <Button className="h-11 rounded-[14px] bg-blue-500 px-6 text-[14px] hover:bg-blue-600">
             联系客服
           </Button>
         </div>

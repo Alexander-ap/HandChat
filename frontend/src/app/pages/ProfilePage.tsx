@@ -17,8 +17,10 @@ import { Switch } from "../components/ui/switch";
 import { toast } from "sonner";
 import { PageStateContext } from "../components/Root";
 import ThemeSelector from "../components/ThemeSelector";
+import LanguageSelector from "../components/LanguageSelector";
 import { supabase } from "../lib/supabase";
 import { userApi } from "../lib/api";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -28,8 +30,10 @@ export default function ProfilePage() {
   const [notifications, setNotifications] = useState(savedState.notifications !== undefined ? savedState.notifications : true);
   const [vibration, setVibration] = useState(savedState.vibration !== undefined ? savedState.vibration : true);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
+  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [userProfile, setUserProfile] = useState<{name: string; email: string; id: string; avatarUrl: string} | null>(null);
   const [stats, setStats] = useState({ days: 0, points: 0, achievements: 0, postCount: 0, followingCount: 0, followerCount: 0 });
+  const { text, language } = useLanguage();
 
   /** 获取用户信息和统计数据 */
   useEffect(() => {
@@ -64,15 +68,7 @@ export default function ProfilePage() {
           }
         } catch (e: any) {
           console.warn("[个人中心] 获取统计失败 (使用默认值):", e.message || e);
-        }
-
-        // 加载服务端设置
-        try {
-          const settings = await userApi.getSettings()
-          if (settings.notification !== undefined) setNotifications(settings.notification)
-          if (settings.vibration !== undefined) setVibration(settings.vibration)
-        } catch (e) {
-          // 使用本地状态
+          // 静默降级，使用默认统计数据，不打扰用户
         }
       } catch (error: any) {
         console.error("[个人中心] 获取会话失败:", error);
@@ -107,40 +103,40 @@ export default function ProfilePage() {
 
   useEffect(() => {
     setPageState('profile', { notifications, vibration });
-    userApi.updateSettings({ notification: notifications, vibration }).catch(() => {})
   }, [notifications, vibration, setPageState]);
 
   const userStats = [
-    { label: "帖子", value: stats.postCount, icon: FileText },
-    { label: "关注", value: stats.followingCount, icon: TrendingUp },
-    { label: "粉丝", value: stats.followerCount, icon: Award },
+    { label: text("帖子", "Posts"), value: stats.postCount, icon: FileText },
+    { label: text("关注", "Following"), value: stats.followingCount, icon: TrendingUp },
+    { label: text("粉丝", "Followers"), value: stats.followerCount, icon: Award },
   ];
 
   const settingsGroups = [
     {
-      title: "账号与设置",
+      title: text("账号与设置", "Account & Settings"),
       items: [
-        { icon: User, label: "个人资料", action: () => navigate("/profile/edit"), color: "text-blue-500", bg: "bg-blue-50" },
-        { icon: Lock, label: "修改密码", action: () => navigate("/change-password"), color: "text-indigo-500", bg: "bg-indigo-50" },
-        { icon: Palette, label: "背景主题", action: () => setShowThemeSelector(true), color: "text-purple-500", bg: "bg-purple-50" },
-        { icon: Bell, label: "通知设置", hasSwitch: true, switchValue: notifications, onSwitchChange: setNotifications, color: "text-red-500", bg: "bg-red-50" },
-        { icon: Settings, label: "震动提醒", hasSwitch: true, switchValue: vibration, onSwitchChange: setVibration, color: "text-gray-500", bg: "bg-gray-100" },
+        { icon: User, label: text("个人资料", "Profile"), action: () => navigate("/profile/edit"), color: "text-blue-500", bg: "bg-blue-50" },
+        { icon: Lock, label: text("修改密码", "Change Password"), action: () => navigate("/change-password"), color: "text-indigo-500", bg: "bg-indigo-50" },
+        { icon: Palette, label: text("背景主题", "Theme Background"), action: () => setShowThemeSelector(true), color: "text-purple-500", bg: "bg-purple-50" },
+        { icon: Settings, label: text("语言", "Language"), badge: language === "zh" ? "中文" : "English", action: () => setShowLanguageSelector(true), color: "text-cyan-500", bg: "bg-cyan-50" },
+        { icon: Bell, label: text("通知设置", "Notifications"), hasSwitch: true, switchValue: notifications, onSwitchChange: setNotifications, color: "text-red-500", bg: "bg-red-50" },
+        { icon: Settings, label: text("震动提醒", "Vibration"), hasSwitch: true, switchValue: vibration, onSwitchChange: setVibration, color: "text-gray-500", bg: "bg-gray-100" },
       ],
     },
     {
-      title: "数据与成就",
+      title: text("数据与成就", "Data & Achievements"),
       items: [
-        { icon: Calendar, label: "使用统计", badge: `${stats.days}天`, action: () => navigate("/usage"), color: "text-green-500", bg: "bg-green-50" },
-        { icon: Star, label: "我的积分", badge: `${stats.points.toLocaleString()}`, action: () => navigate("/points"), color: "text-orange-500", bg: "bg-orange-50" },
-        { icon: Award, label: "成就徽章", badge: `${stats.achievements}个`, action: () => navigate("/achievements"), color: "text-indigo-500", bg: "bg-indigo-50" },
+        { icon: Calendar, label: text("使用统计", "Usage Stats"), badge: `${stats.days}${text("天", "d")}`, action: () => navigate("/usage"), color: "text-green-500", bg: "bg-green-50" },
+        { icon: Star, label: text("我的积分", "My Points"), badge: `${stats.points.toLocaleString()}`, action: () => navigate("/points"), color: "text-orange-500", bg: "bg-orange-50" },
+        { icon: Award, label: text("成就徽章", "Achievements"), badge: `${stats.achievements}${text("个", "")}`, action: () => navigate("/achievements"), color: "text-indigo-500", bg: "bg-indigo-50" },
       ],
     },
     {
-      title: "关于与支持",
+      title: text("关于与支持", "About & Support"),
       items: [
-        { icon: Shield, label: "隐私与安全", action: () => navigate("/privacy"), color: "text-teal-500", bg: "bg-teal-50" },
-        { icon: HelpCircle, label: "帮助中心", action: () => navigate("/help"), color: "text-yellow-500", bg: "bg-yellow-50" },
-        { icon: FileText, label: "用户协议", action: () => navigate("/agreement"), color: "text-cyan-500", bg: "bg-cyan-50" },
+        { icon: Shield, label: text("隐私与安全", "Privacy & Security"), action: () => navigate("/privacy"), color: "text-teal-500", bg: "bg-teal-50" },
+        { icon: HelpCircle, label: text("帮助中心", "Help Center"), action: () => navigate("/help"), color: "text-yellow-500", bg: "bg-yellow-50" },
+        { icon: FileText, label: text("用户协议", "User Agreement"), action: () => navigate("/agreement"), color: "text-cyan-500", bg: "bg-cyan-50" },
       ],
     },
   ];
@@ -148,12 +144,12 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      toast.success("已退出登录");
+      toast.success(text("已退出登录", "Signed out"));
       navigate("/login");
     } catch (error) {
       console.error("[个人中心] 退出登录失败:", error);
       // 即使退出失败也跳转到登录页（清理本地状态）
-      toast.success("已退出登录");
+      toast.success(text("已退出登录", "Signed out"));
       navigate("/login");
     }
   };
@@ -161,57 +157,57 @@ export default function ProfilePage() {
   if (!userProfile) return null;
 
   return (
-    <div className="min-h-screen pb-20" style={{ background: 'var(--app-background, #F2F2F7)' }}>
+    <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
       {/* 头部 */}
-      <div className="bg-white/80 backdrop-blur-xl px-4 pt-12 pb-3 shadow-sm sticky top-0 z-50 flex flex-col justify-end items-center">
+      <div className="app-topbar sticky top-0 z-50 flex flex-col items-center justify-end px-4 pt-12 pb-4">
         <div className="w-full max-w-2xl">
-          <h1 className="text-[28px] font-bold text-black leading-none">个人中心</h1>
+          <h1 className="text-[30px] font-bold leading-none tracking-[-0.03em] text-slate-900">{text("个人中心", "Profile")}</h1>
         </div>
       </div>
 
-      <div className="px-4 pt-3 space-y-2.5 w-full max-w-2xl mx-auto">
+      <div className="mx-auto w-full max-w-2xl space-y-4 px-4 pt-4">
         {/* 用户卡片 */}
         <div 
           onClick={() => navigate("/profile/edit")}
-          className="bg-white rounded-[14px] p-3.5 shadow-sm flex items-center gap-3.5 cursor-pointer active:bg-gray-50 transition-colors"
+          className="app-panel app-grid-glow flex cursor-pointer items-center gap-4 rounded-[24px] p-4 transition-colors"
         >
-          <Avatar className="w-14 h-14 shadow-sm">
+          <Avatar className="h-16 w-16 border border-white/70 shadow-[0_16px_32px_rgba(15,23,42,0.08)]">
             <AvatarImage src={userProfile.avatarUrl} className="object-cover" />
-            <AvatarFallback className="bg-gray-100 text-gray-500 text-[18px] font-medium">
+            <AvatarFallback className="bg-gradient-to-br from-blue-100 via-indigo-50 to-white text-[18px] font-medium text-blue-600">
               {userProfile.name.charAt(0)}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <h2 className="text-[18px] font-semibold text-black truncate">{userProfile.name}</h2>
-            <p className="text-[14px] text-gray-500 truncate">ID: {userProfile.id}</p>
+            <h2 className="truncate text-[20px] font-semibold tracking-[-0.02em] text-slate-900">{userProfile.name}</h2>
+            <p className="truncate text-[14px] text-slate-500">{text("编号", "ID")}: {userProfile.id}</p>
           </div>
-          <ChevronRight className="w-5 h-5 text-gray-300 flex-shrink-0" />
+          <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-300" />
         </div>
 
         {/* 统计 */}
-        <div className="bg-white rounded-[14px] shadow-sm overflow-hidden flex divide-x divide-gray-100 py-2">
+        <div className="app-panel grid grid-cols-3 overflow-hidden rounded-[24px] py-2">
           {userStats.map(stat => {
             const Icon = stat.icon;
             const handleClick = () => {
-              if (stat.label === "关注") {
+              if (stat.label === text("关注", "Following")) {
                 navigate("/profile/follow?tab=following");
-              } else if (stat.label === "粉丝") {
+              } else if (stat.label === text("粉丝", "Followers")) {
                 navigate("/profile/follow?tab=followers");
-              } else if (stat.label === "帖子") {
+              } else if (stat.label === text("帖子", "Posts")) {
                 navigate("/community");
               } else {
-                toast.info(`${stat.label}功能开发中`);
+                toast.info(text(`${stat.label}功能开发中`, `${stat.label} is coming soon`));
               }
             };
             return (
               <div 
                 key={stat.label} 
-                className="flex-1 flex flex-col items-center justify-center py-1.5 cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                className="flex flex-col items-center justify-center gap-1 py-3 transition-colors hover:bg-white/45"
                 onClick={handleClick}
               >
-                <span className="text-[18px] font-bold text-black mb-0.5">{stat.value}</span>
-                <div className="flex items-center gap-1 text-gray-500">
-                  <Icon className="w-3 h-3" />
+                <span className="text-[20px] font-bold tracking-[-0.03em] text-slate-900">{stat.value}</span>
+                <div className="flex items-center gap-1 text-slate-500">
+                  <Icon className="h-3.5 w-3.5" />
                   <span className="text-[12px] font-medium">{stat.label}</span>
                 </div>
               </div>
@@ -222,10 +218,10 @@ export default function ProfilePage() {
         {/* 设置组 */}
         {settingsGroups.map((group, groupIndex) => (
           <div key={groupIndex}>
-            <h3 className="text-[12px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 ml-4">
+            <h3 className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               {group.title}
             </h3>
-            <div className="bg-white rounded-[14px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
+            <div className="app-panel overflow-hidden rounded-[24px]">
               {group.items.map((item, itemIndex) => {
                 const Icon = item.icon;
                 const isLast = itemIndex === group.items.length - 1;
@@ -235,20 +231,20 @@ export default function ProfilePage() {
                   <Wrapper
                     key={itemIndex}
                     onClick={item.hasSwitch ? undefined : item.action}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 transition-colors ${
-                      !item.hasSwitch ? 'active:bg-gray-50 cursor-pointer' : ''
+                    className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${
+                      !item.hasSwitch ? 'cursor-pointer hover:bg-white/40 active:bg-white/55' : ''
                     }`}
-                    style={!isLast ? { borderBottom: '0.5px solid rgba(0,0,0,0.06)' } : {}}
+                    style={!isLast ? { borderBottom: '1px solid rgba(148,163,184,0.10)' } : {}}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-[28px] h-[28px] ${item.bg} rounded-[7px] flex items-center justify-center flex-shrink-0`}>
+                      <div className={`h-9 w-9 ${item.bg} rounded-[12px] flex items-center justify-center flex-shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]`}>
                         <Icon className={`w-3.5 h-3.5 ${item.color}`} />
                       </div>
-                      <span className="text-[15px] text-black">{item.label}</span>
+                      <span className="text-[15px] text-slate-900">{item.label}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       {item.badge && (
-                        <span className="text-[14px] text-gray-400">{item.badge}</span>
+                        <span className="rounded-full bg-white/75 px-2.5 py-1 text-[12px] text-slate-500 shadow-[0_6px_18px_rgba(15,23,42,0.05)]">{item.badge}</span>
                       )}
                       {item.hasSwitch ? (
                         <Switch
@@ -272,18 +268,19 @@ export default function ProfilePage() {
           <Button
             onClick={handleLogout}
             variant="ghost"
-            className="w-full h-11 bg-white rounded-[14px] text-[#FF3B30] text-[15px] font-medium shadow-[0_1px_2px_rgba(0,0,0,0.05)] active:bg-gray-50"
+            className="app-panel w-full h-12 rounded-[20px] text-[15px] font-medium text-[#FF3B30] hover:bg-white/85"
           >
-            退出登录
+            {text("退出登录", "Sign Out")}
           </Button>
           <div className="text-center space-y-1 mt-6">
-            <p className="text-[12px] text-gray-400 font-medium">无障碍助手 v2.0.0</p>
-            <p className="text-[11px] text-gray-400/80">© 2026 无障碍团队</p>
+            <p className="text-[12px] text-gray-400 font-medium">{text("无障碍助手 v2.0.0", "HandChat v2.0.0")}</p>
+            <p className="text-[11px] text-gray-400/80">{text("© 2026 无障碍团队", "© 2026 HandChat Team")}</p>
           </div>
         </div>
       </div>
 
       <ThemeSelector open={showThemeSelector} onClose={() => setShowThemeSelector(false)} />
+      <LanguageSelector open={showLanguageSelector} onClose={() => setShowLanguageSelector(false)} />
     </div>
   );
 }
