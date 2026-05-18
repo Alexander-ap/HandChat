@@ -133,3 +133,48 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     totalSoundDetections: 0,
   }
 }
+
+export async function getDailyStats(userId: string, days: number = 7) {
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+
+  const sessions = await prisma.session.findMany({
+    where: {
+      userId,
+      startedAt: { gte: since },
+    },
+    select: { startedAt: true },
+  })
+
+  const dateCounts: Record<string, number> = {}
+  for (const s of sessions) {
+    const date = s.startedAt.toISOString().slice(0, 10)
+    dateCounts[date] = (dateCounts[date] || 0) + 1
+  }
+
+  const result: { date: string; count: number }[] = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const date = d.toISOString().slice(0, 10)
+    result.push({ date, count: dateCounts[date] || 0 })
+  }
+
+  logger.info('Daily stats fetched', { userId, days })
+  return result
+}
+
+export async function getUserBasic(userId: string) {
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId },
+  })
+  if (!profile) {
+    return { userId, nickname: null, avatar: null }
+  }
+  logger.info('User basic info fetched', { userId })
+  return {
+    userId: profile.userId,
+    nickname: profile.nickname,
+    avatar: profile.avatar,
+  }
+}
