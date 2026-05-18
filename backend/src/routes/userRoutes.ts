@@ -6,6 +6,8 @@ import {
   getSettings,
   updateSettings,
   getUserStats,
+  getDailyStats,
+  getUserBasic,
 } from '../services/userService'
 
 const router = Router()
@@ -70,6 +72,28 @@ router.get('/stats', authMiddleware, async (req, res, next) => {
   try {
     const stats = await getUserStats(req.userId!)
     res.json({ stats })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/stats/daily', authMiddleware, async (req, res, next) => {
+  try {
+    const days = Math.min(
+      Math.max(1, parseInt(req.query.days as string) || 7),
+      30
+    )
+    const stats = await getDailyStats(req.userId!, days)
+    res.json(stats)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/:id/basic', async (req, res, next) => {
+  try {
+    const info = await getUserBasic(req.params.id)
+    res.json(info)
   } catch (err) {
     next(err)
   }
