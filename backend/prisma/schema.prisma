@@ -66,6 +66,16 @@ model Follow {
   @@index([followingId])
 }
 
+model Bookmark {
+  id        String   @id @default(uuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([userId])
+}
+
 model UserProfile {
   userId       String   @id
   nickname     String?
