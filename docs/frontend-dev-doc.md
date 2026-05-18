@@ -1,7 +1,7 @@
 # HandChat 前端开发文档 — Phase 2.5
 
 > **编写日期：** 2026-05-17  
-> **版本：** v1.0  
+> **版本：** v1.1  
 > **依赖接口文档：** [interfaces.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/interfaces.md)  
 > **适用阶段：** Phase 2 辅助功能完成后的前端冲刺
 
@@ -17,6 +17,7 @@
 | 4 | 社区发帖系统（完整CRUD+点赞+评论） | [CommunityPage.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/pages/CommunityPage.tsx) + [api.ts](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/lib/api.ts) | ✅ |
 | 5 | 成就/积分/设置 API 对接 | AchievementsPage / PointsPage / PrivacySettingsPage | ✅ |
 | 6 | UsageStatsPage 假数据清除 | [UsageStatsPage.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/pages/UsageStatsPage.tsx) | ✅ |
+| 7 | 帖子详情页（点击帖子进入独立页） | `PostDetailPage.tsx` + `routes.tsx` + `CommunityPage.tsx` | ✅ |
 
 ---
 
@@ -28,6 +29,7 @@
 ├── 📷 识别  →  /home                        [原首屏，现为次页]
 ├── 🔊 声音  →  /sound
 ├── 💬 社区  →  /community
+│   └── /community/posts/:postId           帖子详情页     [🆕 新增]
 └── 👤 我的  →  /profile
 
 个人中心二级页面
@@ -95,7 +97,7 @@ Follow { id, followerId, followingId, createdAt }
 
 | 卡片 | 点击前 | 点击后 |
 |------|--------|--------|
-| 帖子 | `toast.info("帖子功能开发中")` | 同（保留占位） |
+| 帖子 | `toast.info("帖子功能开发中")` | `navigate("/community")` |
 | 关注 | `toast.info("关注功能开发中")` | `navigate("/profile/follow?tab=following")` |
 | 粉丝 | `toast.info("粉丝功能开发中")` | `navigate("/profile/follow?tab=followers")` |
 
@@ -180,7 +182,6 @@ Follow { id, followerId, followingId, createdAt }
 |--------|------|---------|------|
 | **P1** | 社区"关注"Tab → 真实关注流 | CommunityPage.tsx | 需要后端 `/api/posts?feed=following` 接口 |
 | **P1** | 近7天使用时长图表 | UsageStatsPage.tsx | 需要后端 `/api/user/stats/daily` 接口 |
-| **P1** | 帖子详情页（点击帖子进入独立页） | 新建 PostDetailPage.tsx | 无 |
 | **P1** | 积分抽奖/商城/会员快捷入口 | PointsPage.tsx | 产品设计确认 |
 | **P2** | FollowListPage 用户名展示（非ID） | FollowListPage.tsx | 需要后端 `/api/user/:id/basic` 批量查询接口 |
 | **P2** | 好友系统 | 全新增 | 架构设计确认（是否区别于关注） |

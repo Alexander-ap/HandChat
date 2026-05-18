@@ -490,6 +490,7 @@ function PostCard({ post, onLike, onBookmark, onComment }: {
   onBookmark: (id: string) => void;
   onComment: (id: string) => void;
 }) {
+  const navigate = useNavigate();
   const author = typeof post.author === 'string' 
     ? { name: post.author, avatar: '', verified: false } 
     : (post.author || { name: '匿名', avatar: '', verified: false });
@@ -524,15 +525,25 @@ function PostCard({ post, onLike, onBookmark, onComment }: {
       </div>
 
       {/* 内容 */}
-      <p className="text-[14px] text-gray-800 mb-2.5 leading-relaxed">{post.content}</p>
+      <button
+        type="button"
+        onClick={() => navigate(`/community/posts/${post.id}`, { state: { post } })}
+        className="w-full text-left"
+      >
+        <p className="text-[14px] text-gray-800 mb-2.5 leading-relaxed hover:text-gray-900 transition-colors">{post.content}</p>
+      </button>
 
       {/* 图片 */}
       {post.images && post.images.length > 0 && (
-        <div className={`mb-2.5 rounded-[12px] overflow-hidden ${post.images.length > 1 ? 'grid grid-cols-2 gap-0.5' : ''}`}>
+        <button
+          type="button"
+          onClick={() => navigate(`/community/posts/${post.id}`, { state: { post } })}
+          className={`mb-2.5 w-full rounded-[12px] overflow-hidden ${post.images.length > 1 ? 'grid grid-cols-2 gap-0.5' : 'block'}`}
+        >
           {post.images.slice(0, 4).map((img, i) => (
             <img key={i} src={img} alt="Post" className="w-full h-40 object-cover" />
           ))}
-        </div>
+        </button>
       )}
 
       {/* 互动 */}

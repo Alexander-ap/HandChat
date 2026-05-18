@@ -369,6 +369,21 @@ export const postsApi = {
     return apiCall('/posts', {}, false);
   },
 
+  /** 获取单个帖子详情 */
+  async getById(postId: string) {
+    const posts = await apiCall('/posts', {}, false);
+    if (!Array.isArray(posts)) {
+      throw new Error('帖子数据格式异常');
+    }
+
+    const target = posts.find((item: any) => item?.id === postId);
+    if (!target) {
+      throw new Error('帖子不存在或已删除');
+    }
+
+    return target;
+  },
+
   /** 删除帖子 */
   async delete(postId: string) {
     return apiCall(`/posts/${postId}`, {
@@ -402,7 +417,10 @@ export const postsApi = {
 
   /** 获取帖子评论列表 */
   async getComments(postId: string) {
-    return apiCall(`/posts/${postId}/comments`, {}, false);
+    const result = await apiCall(`/posts/${postId}/comments`, {}, false);
+    return {
+      comments: Array.isArray(result) ? result : (result?.comments || []),
+    };
   },
 };
 

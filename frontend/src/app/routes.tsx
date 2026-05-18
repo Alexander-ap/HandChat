@@ -18,6 +18,7 @@ import AchievementsPage from "./pages/AchievementsPage";
 import UsageStatsPage from "./pages/UsageStatsPage";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import PostDetailPage from "./pages/PostDetailPage";
 
 export const router = createBrowserRouter([
   {
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
       { path: "home", Component: HomePage },
       { path: "sound", Component: SoundDetectionPage },
       { path: "community", Component: CommunityPage },
+      { path: "community/posts/:postId", Component: PostDetailPage },
       { path: "profile", Component: ProfilePage },
       { path: "profile/follow", Component: FollowListPage },
       { path: "profile/edit", Component: EditProfilePage },

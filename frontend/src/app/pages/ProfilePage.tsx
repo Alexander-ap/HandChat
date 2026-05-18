@@ -197,6 +197,8 @@ export default function ProfilePage() {
                 navigate("/profile/follow?tab=following");
               } else if (stat.label === "粉丝") {
                 navigate("/profile/follow?tab=followers");
+              } else if (stat.label === "帖子") {
+                navigate("/community");
               } else {
                 toast.info(`${stat.label}功能开发中`);
               }
