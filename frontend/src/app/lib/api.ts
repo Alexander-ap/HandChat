@@ -12,7 +12,7 @@ import { supabase } from './supabase';
 
 /** API 基础地址 — 开发用本地 Express，生产用 Supabase Edge Function */
 const API_BASE = import.meta.env.VITE_API_URL
-  || `https://${projectId}.supabase.co/functions/v1/make-server-481f4acb`;
+  || (import.meta.env.DEV ? 'http://localhost:3001/api' : `https://${projectId}.supabase.co/functions/v1/make-server-481f4acb`);
 
 // ============================================================
 // 基础工具函数
@@ -361,7 +361,7 @@ export const postsApi = {
     return apiCall('/posts', {
       method: 'POST',
       body: JSON.stringify(data),
-    }, false);
+    }, true);
   },
 
   /** 获取所有帖子列表 */

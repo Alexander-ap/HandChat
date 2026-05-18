@@ -34,7 +34,7 @@ app.use('/api/points', pointsRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled API error', { error: err.message, stack: err.stack });
-  res.status(500).json({ error: 'Internal server error' });
+  res.status(500).json({ error: config.nodeEnv === 'development' ? err.message : 'Internal server error' });
 });
 
 wss.on('connection', (ws: WebSocket & { isAlive?: boolean }) => {

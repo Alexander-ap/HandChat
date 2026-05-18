@@ -50,10 +50,13 @@ router.post('/', authMiddleware, async (req, res, next) => {
     if (effectiveTitle.length > 200 || effectiveContent.length > 10000) {
       return res.status(400).json({ error: 'Title or content exceeds maximum length' })
     }
+    if (!req.userId) {
+      return res.status(401).json({ error: 'Not authenticated' })
+    }
     const post = await createPost({
       title: effectiveTitle,
       content: effectiveContent,
-      authorId: req.userId!,
+      authorId: req.userId,
     })
     res.status(201).json({
       id: post.id,
