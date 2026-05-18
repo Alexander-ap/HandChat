@@ -1,0 +1,49 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+/* 移动端优化 */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* 允许输入框和文本区域可选中 */
+  input, textarea, [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  
+  /* iOS安全区域支持 */
+  .safe-area-inset-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+  
+  /* 隐藏滚动条但保留滚动功能 */
+  ::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
+
+  /* 禁用 iOS 缩放 */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+/* Toast 通知在移动端的增强样式 */
+[data-sonner-toaster] {
+  --width: calc(100vw - 32px) !important;
+}
