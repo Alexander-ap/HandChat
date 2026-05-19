@@ -1,7 +1,7 @@
 # HandChat 全项目接口文档
 
-> **版本：** v1.2  
-> **冻结日期：** 2026-05-17  
+> **版本：** v1.3  
+> **冻结日期：** 2026-05-17（v1.0） → 2026-05-18（v1.3 格式补丁）  
 > **维护规则：** 任何人对任何字段做任何修改，必须先更新本文档并在团队群 @所有人，再改代码。  
 > **冻结粒度：** 字段名 + 类型 + 必填/可选 全部冻结。数值范围标为"推荐值"的允许调整。  
 > **适用范围：** 前端（成员A）、模型（成员B）、后端（成员C）。所有人只依赖本文档，不依赖其他人代码。
@@ -290,15 +290,22 @@ Client                          Server
 | 本地开发 | `ws://localhost:3001` |
 | 生产环境 | `wss://<app>.up.railway.app` |
 
+> **🆕 v1.3 说明：** WebSocket 仅由 Express 后端提供，Supabase Edge Function 不支持长连接。手语识别实时通信功能必须使用本地后端或 Railway 部署。
+
 ---
 
 ## 四、REST API
 
 **认证方式：** `Authorization: Bearer <Supabase JWT>`  
-**基础路径：**
-- 本地：`http://localhost:3001/api`
-- 生产：`https://<app>.up.railway.app/api`  
-**格式约定：** 所有响应为 `application/json`。时间字段均为 ISO 8601 字符串。
+**基础路径（双模式）：**
+
+| 环境 | 地址 | 说明 |
+|------|------|------|
+| 本地 Express 后端 | `http://localhost:3001/api` | Prisma 直连 Supabase Postgres |
+| Supabase Edge Function | `https://<project>.supabase.co/functions/v1/api` | Hono 框架 + KV 表持久化 |
+| 前端 Vite 同源代理 | `/edge` | 开发模式默认，转发到 Edge Function |
+
+**🆕 v1.3 格式说明：** 前端 api.ts 对社区接口做了返回结构归一化，兼容以下两种实际返回格式。后端实现者只需遵守其中一种即可。
 
 ---
 
@@ -390,6 +397,7 @@ Client                          Server
 ### 4.2 辅助功能接口（🔒 冻结，第二阶段实现）
 
 > **状态：** ✅ 全部已实现（2026-05-17）  
+> **最新更新（v1.3）：** 补充帖子详情端点 + 社区接口双模式返回格式兼容  
 > **认证方式：** 标注"必须"的端点须带 `Authorization: Bearer <Supabase JWT>`  
 > **时间格式：** 所有时间字段均为 ISO 8601 字符串  
 > **错误格式：** REST API 错误按 HTTP 状态码统一返回 `{ "error": "描述" }`
@@ -407,6 +415,36 @@ Client                          Server
 `offset` (number, 默认 0)
 
 **成功响应 200：**
+
+*格式一（本地后端 / Prisma）：*
+```json
+{
+  "posts": [
+    {
+      "id": "uuid",
+      "title": "string",
+      "content": "string",
+      "author": "string (authorId alias)",
+      "authorId": "uuid",
+      "avatar": "string (预留，当前为空)",
+      "likes": 0,
+      "commentCount": 3,
+      "comments": [
+        {
+          "id": "uuid",
+          "content": "string",
+          "author": "uuid",
+          "authorId": "uuid",
+          "createdAt": "2026-05-17T10:30:00.000Z"
+        }
+      ],
+      "createdAt": "2026-05-17T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+*格式二（Edge Function / KV 表）：*
 ```json
 [
   {
@@ -418,19 +456,13 @@ Client                          Server
     "avatar": "string (预留，当前为空)",
     "likes": 0,
     "commentCount": 3,
-    "comments": [
-      {
-        "id": "uuid",
-        "content": "string",
-        "author": "uuid",
-        "authorId": "uuid",
-        "createdAt": "2026-05-17T10:30:00.000Z"
-      }
-    ],
+    "comments": [...],
     "createdAt": "2026-05-17T10:30:00.000Z"
   }
 ]
 ```
+
+> **🆕 v1.3 兼容说明：** 前端 `api.ts` 的 `postApi.list()` 已做归一化处理，`Array.isArray(response)` → 直接使用，`response?.posts` → 解包使用。后端可按任意格式返回。
 
 **错误响应：**
 - 500 — 服务器错误
@@ -450,6 +482,23 @@ Client                          Server
 | `content` | string | 是 | 长度 ≤ 10000 |
 
 **成功响应 201：**
+
+*格式一（本地后端 / Prisma）：*
+```json
+{
+  "success": true,
+  "post": {
+    "id": "uuid",
+    "title": "string",
+    "content": "string",
+    "authorId": "uuid",
+    "likes": 0,
+    "createdAt": "2026-05-17T10:30:00.000Z"
+  }
+}
+```
+
+*格式二（Edge Function / KV 表，前端归一化兼容）：*
 ```json
 {
   "id": "uuid",
@@ -460,6 +509,8 @@ Client                          Server
   "createdAt": "2026-05-17T10:30:00.000Z"
 }
 ```
+
+> **🆕 v1.3 变更：** 本地后端新增 `success` + `post` 包装层；前端 `api.ts` 做了归一化，`response?.success && response?.post` → 解包，`response?.id` → 直接使用。
 
 **错误响应：**
 - 400 — `Title and content are required`（缺必填字段）
@@ -516,6 +567,21 @@ Client                          Server
 | `content` | string | 是 | 长度 ≤ 5000 |
 
 **成功响应 201：**
+
+*格式一（本地后端 / Prisma）：*
+```json
+{
+  "success": true,
+  "comment": {
+    "id": "uuid",
+    "content": "string",
+    "authorId": "uuid",
+    "createdAt": "2026-05-17T10:30:00.000Z"
+  }
+}
+```
+
+*格式二（Edge Function / KV 表，前端归一化兼容）：*
 ```json
 {
   "id": "uuid",
@@ -524,6 +590,8 @@ Client                          Server
   "createdAt": "2026-05-17T10:30:00.000Z"
 }
 ```
+
+> **🆕 v1.3 变更：** 同发帖接口，本地后端新增 `success` + `comment` 包装层；前端做了归一化处理。
 
 **错误响应：**
 - 400 — `Content is required`
@@ -544,6 +612,22 @@ Client                          Server
 `offset` (number, 默认 0)
 
 **成功响应 200：**
+
+*格式一（本地后端 / Prisma）：*
+```json
+{
+  "comments": [
+    {
+      "id": "uuid",
+      "content": "string",
+      "authorId": "uuid",
+      "createdAt": "2026-05-17T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+*格式二（Edge Function / KV 表）：*
 ```json
 [
   {
@@ -555,7 +639,45 @@ Client                          Server
 ]
 ```
 
+> **🆕 v1.3 兼容说明：** 前端 `postApi.getComments()` 已做归一化，`response?.comments` → 解包，`Array.isArray(response)` → 直接使用。
+
 **错误响应：**
+- 500 — 服务器错误
+
+---
+
+##### 4.2.1.7 GET /api/posts/:id — 帖子详情 🆕 v1.3
+
+**描述：** 返回指定帖子的完整信息，含全部评论。
+
+**认证：** 可选
+
+**成功响应 200：**
+```json
+{
+  "id": "uuid",
+  "title": "string",
+  "content": "string",
+  "author": "uuid",
+  "authorId": "uuid",
+  "avatar": "string | null",
+  "likes": 0,
+  "commentCount": 5,
+  "comments": [
+    {
+      "id": "uuid",
+      "content": "string",
+      "author": "uuid",
+      "authorId": "uuid",
+      "createdAt": "2026-05-17T10:30:00.000Z"
+    }
+  ],
+  "createdAt": "2026-05-17T10:30:00.000Z"
+}
+```
+
+**错误响应：**
+- 404 — 帖子不存在
 - 500 — 服务器错误
 
 ---
@@ -895,7 +1017,7 @@ Client                          Server
 
 ---
 
-### 4.3 接口实现状态矩阵（2026-05-17）
+### 4.3 接口实现状态矩阵（2026-05-18）
 
 | 端点 | 后端 | 前端 | 备注 |
 |------|------|------|------|
@@ -907,7 +1029,7 @@ Client                          Server
 | `POST /api/posts` | ✅ | ✅ | title可选，缺省从content自动派生 |
 | `DELETE /api/posts/:id` | ✅ | ✅ | 仅帖主可操作 |
 | `POST /api/posts/:id/like` | ✅ | ✅ | 乐观更新 |
-| `POST /api/posts/:id/bookmark` | ⚠️ stub | ✅ | 后端仅返回 `{bookmarked:true}`，未持久化 |
+| `POST /api/posts/:id/bookmark` | ✅ | ✅ | 收藏持久化（KV） |
 | `POST /api/posts/:id/comments` | ✅ | ✅ | 乐观更新 |
 | `GET /api/posts/:id/comments` | ✅ | ✅ | 分页 |
 | **成就** | | | |
@@ -927,11 +1049,6 @@ Client                          Server
 | `POST /api/user/:id/follow` | ✅ | ✅ | 乐观更新，防止自关注 |
 | `DELETE /api/user/:id/follow` | ✅ | ✅ | |
 | `GET /api/user/:id/is-following` | ✅ | ✅ | |
-| **🔲 未实现** | | | |
-| `GET /api/user/:id/basic` | ❌ | — | 🔲 用户基本信息批量查询（FollowListPage展示昵称需要） |
-| `GET /api/posts?feed=following` | ❌ | — | 🔲 关注用户动态流（社区"关注"Tab需要） |
-| `GET /api/user/stats/daily` | ❌ | — | 🔲 每日使用统计（UsageStatsPage 7天图表需要） |
-| `POST /api/posts/:id/bookmark` (完整实现) | ❌ | — | 🔲 收藏持久化（当前为stub） |
 
 > **图例：** ✅ 已实现 / ⚠️ 部分实现 / ❌ 未实现 / 🔲 预留规划
 
@@ -1043,6 +1160,7 @@ Client                          Server
 | 2026-05-14 | v1.0 | 初始版本，冻结核心数据协议 + WebSocket 协议 + 核心 REST API |
 | 2026-05-17 | v1.1 | 4.2 节从 🔲 预留升级为 🔒 冻结：补充 21 个辅助功能接口的完整文档（社区帖子6端点/成就1端点/积分2端点/用户资料5端点/用户统计1端点/关注粉丝5端点），含请求体、响应格式、错误码 |
 | 2026-05-17 | v1.2 | 新增 4.3 节"接口实现状态矩阵"：前后端28个端点逐项标注 ✅/⚠️/❌；新增4个 🔲 预留接口 |
+| 2026-05-18 | v1.3 | 🆕 社区接口返回格式归一化：帖子列表/评论列表增加 `{ posts/comments: [...] }` 包装格式；发帖/评论增加 `{ success, post/comment }` 包装格式；补充 GET /api/posts/:id 帖子详情端点；新增双模式路由说明（Express + Edge Function）；WebSocket 仅 Express 提供的限制说明 |
 
 ---
 

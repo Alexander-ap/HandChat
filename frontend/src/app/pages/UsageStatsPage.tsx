@@ -10,30 +10,50 @@ import { Button } from "../components/ui/button";
 import { userApi } from "../lib/api";
 import { useLanguage } from "../contexts/LanguageContext";
 
+interface DailyStatItem {
+  date: string;
+  count: number;
+}
+
+function getDailyLabel(date: string, locale: "zh" | "en") {
+  const value = new Date(`${date}T00:00:00`);
+  return value.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
+    weekday: "short",
+  });
+}
+
 export default function UsageStatsPage() {
   const navigate = useNavigate();
-  const { text } = useLanguage();
+  const { text, language } = useLanguage();
   const [stats, setStats] = useState({
     days: 0, points: 0, achievements: 0, loginStreak: 0,
     totalTranslations: 0, totalOcr: 0, totalSoundDetections: 0
   });
+  const [dailyStats, setDailyStats] = useState<DailyStatItem[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const data = await userApi.getStats();
-        if (data.stats) setStats(prev => ({ ...prev, ...data.stats }));
+        const [statsData, dailyData] = await Promise.all([
+          userApi.getStats(),
+          userApi.getDailyStats(7),
+        ]);
+
+        if (statsData.stats) {
+          setStats(prev => ({ ...prev, ...statsData.stats }));
+        }
+
+        setDailyStats(Array.isArray(dailyData) ? dailyData : []);
       } catch (e) {
         console.warn("[使用统计] 获取数据失败(可能未登录):", e);
-        // 使用默认示例数据
-        setStats({
-          days: 7, points: 100, achievements: 3, loginStreak: 3,
-          totalTranslations: 15, totalOcr: 22, totalSoundDetections: 8
-        });
+        setDailyStats([]);
       }
     };
     fetchStats();
   }, []);
+
+  const totalFeatureUsage = (stats.totalOcr || 0) + (stats.totalTranslations || 0) + (stats.totalSoundDetections || 0);
+  const maxDailyCount = Math.max(...dailyStats.map((item) => item.count), 1);
 
   const displayStats = [
     { label: text("累计使用天数", "Days Used"), value: String(stats.days || 0), unit: text("天", "d"), icon: Calendar, color: "text-blue-500", bg: "bg-blue-50" },
@@ -94,18 +114,38 @@ export default function UsageStatsPage() {
         </div>
         
         <div className="app-panel rounded-[24px] p-5">
-          <h3 className="mb-3 text-[15px] font-bold text-slate-900">{text("近 7 天使用时长", "Usage Time in the Last 7 Days")}</h3>
-          <div className="flex items-end justify-between h-36 gap-1.5">
-            {[30, 45, 20, 60, 40, 70, 45].map((height, i) => (
-              <div key={i} className="flex flex-col items-center flex-1 gap-1.5">
-                <div 
-                  className="w-full rounded-t-xl bg-gradient-to-t from-blue-500 to-blue-400 transition-all" 
-                  style={{ height: `${height}%` }}
-                />
-                <span className="text-[10px] text-slate-400">{['一','二','三','四','五','六','日'][i]}</span>
-              </div>
-            ))}
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-[15px] font-bold text-slate-900">{text("近 7 天会话次数", "Session Count in the Last 7 Days")}</h3>
+            <span className="text-[12px] text-slate-400">
+              {text("单位：次", "Unit: sessions")}
+            </span>
           </div>
+          {dailyStats.length > 0 ? (
+            <div className="flex items-end justify-between h-36 gap-1.5">
+              {dailyStats.map((item) => {
+                const height = item.count > 0
+                  ? Math.max(14, Math.round((item.count / maxDailyCount) * 100))
+                  : 6;
+
+                return (
+                  <div key={item.date} className="flex flex-1 flex-col items-center gap-1.5">
+                    <span className="text-[10px] font-medium text-slate-500">{item.count}</span>
+                    <div
+                      className="w-full rounded-t-xl bg-gradient-to-t from-blue-500 to-blue-400 transition-all"
+                      style={{ height: `${height}%`, opacity: item.count > 0 ? 1 : 0.2 }}
+                    />
+                    <span className="text-[10px] text-slate-400">
+                      {getDailyLabel(item.date, language)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-[18px] border border-dashed border-slate-200 bg-white/60 px-4 py-8 text-center text-[13px] text-slate-400">
+              {text("最近 7 天还没有会话数据。", "No session data is available for the last 7 days.")}
+            </div>
+          )}
         </div>
 
         <div className="app-panel rounded-[24px] p-5">
@@ -116,8 +156,7 @@ export default function UsageStatsPage() {
               { label: "手语转换", count: stats.totalTranslations || 0, color: "bg-green-500" },
               { label: "声音检测", count: stats.totalSoundDetections || 0, color: "bg-purple-500" },
             ].map((item, i) => {
-              const total = (stats.totalOcr || 0) + (stats.totalTranslations || 0) + (stats.totalSoundDetections || 0);
-              const pct = total > 0 ? Math.round((item.count / total) * 100) : 33;
+              const pct = totalFeatureUsage > 0 ? Math.round((item.count / totalFeatureUsage) * 100) : 0;
               return (
                 <div key={i}>
                   <div className="flex justify-between text-[13px] mb-1">

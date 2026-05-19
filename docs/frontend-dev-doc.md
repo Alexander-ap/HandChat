@@ -1,9 +1,9 @@
 # HandChat 前端开发文档 — Phase 2.5
 
-> **编写日期：** 2026-05-17  
-> **版本：** v1.1  
+> **编写日期：** 2026-05-18  
+> **版本：** v1.3  
 > **依赖接口文档：** [interfaces.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/interfaces.md)  
-> **适用阶段：** Phase 2 辅助功能完成后的前端冲刺
+> **适用阶段：** Phase 2 辅助功能完成后的前端冲刺与稳定性加固
 
 ---
 
@@ -18,6 +18,22 @@
 | 5 | 成就/积分/设置 API 对接 | AchievementsPage / PointsPage / PrivacySettingsPage | ✅ |
 | 6 | UsageStatsPage 假数据清除 | [UsageStatsPage.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/pages/UsageStatsPage.tsx) | ✅ |
 | 7 | 帖子详情页（点击帖子进入独立页） | `PostDetailPage.tsx` + `routes.tsx` + `CommunityPage.tsx` | ✅ |
+| 8 | 关注/粉丝列表昵称与头像展示 | `FollowListPage.tsx` + `api.ts` | ✅ |
+| 9 | UsageStatsPage 近 7 天统计图表真实对接 | `UsageStatsPage.tsx` + `api.ts` | ✅ |
+| 10 | ProfilePage 资料与设置服务端同步 | `ProfilePage.tsx` + `api.ts` | ✅ |
+| 11 | 社区"关注"Tab 真实关注流 | `CommunityPage.tsx` + `api.ts` + `frontend/supabase/functions/server/index.tsx` | ✅ |
+| 12 | SignLanguageHistory 移除 Mock 模式入口 | `SignLanguageHistoryPage.tsx` + `runtime.ts` + `sessionDataSource.ts` | ✅ |
+| 13 | 积分页快捷入口交互收口 | `PointsPage.tsx` | ✅ |
+| 14 | 前端 Edge 服务函数补齐资料/设置/关注/帖子详情接口 | `frontend/supabase/functions/server/index.tsx` | ✅ |
+| 15 | **Bug 修复：社区评论误判未登录** | [CommunityPage.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/pages/CommunityPage.tsx) | ✅ |
+| 16 | **Bug 修复：音量检测 100% 问题** | [SoundDetectionPage.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/pages/SoundDetectionPage.tsx) | ✅ |
+| 17 | **Bug 修复：随机登出（路由守卫 + API 401）** | [Root.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/components/Root.tsx) + [api.ts](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/lib/api.ts) | ✅ |
+| 18 | **UI 美化：Material Design 3 全量视觉重构** | [theme.css](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/styles/theme.css) + [BottomNav.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/components/BottomNav.tsx) + 全部页面 | ✅ |
+| 19 | **统一标题体系：全页面 title-large 级别** | HomePage / CommunityPage / SoundDetectionPage / SignLanguagePage / ProfilePage | ✅ |
+| 20 | **社区页面错误态与重试机制** | [CommunityPage.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/pages/CommunityPage.tsx) | ✅ |
+| 21 | **API 层超时/AbortError/非 JSON 响应容错** | [api.ts](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/lib/api.ts) | ✅ |
+| 22 | **调试上报改为显式开关（默认关闭）** | [api.ts](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/lib/api.ts) + [Root.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/components/Root.tsx) | ✅ |
+| 23 | **前端 API 双模式运行支持** | [api.ts](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/lib/api.ts) + [.env.local](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/.env.local) | ✅ |
 
 ---
 
@@ -68,7 +84,7 @@ Follow { id, followerId, followingId, createdAt }
 
 ### 3.2 前端API调用
 
-已在 [api.ts](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/lib/api.ts) 中封装 `followApi`，包含5个方法：
+已在 [api.ts](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/lib/api.ts) 中封装 `followApi`，当前包含 7 个方法：
 
 | 方法 | REST 端点 | 认证 | 说明 |
 |------|----------|------|------|
@@ -77,6 +93,8 @@ Follow { id, followerId, followingId, createdAt }
 | `follow(userId)` | `POST /api/user/:id/follow` | 必须 | 关注用户 |
 | `unfollow(userId)` | `DELETE /api/user/:id/follow` | 必须 | 取关 |
 | `isFollowing(userId)` | `GET /api/user/:id/is-following` | 必须 | 检查关注状态 |
+| `getFollowers(userId)` | `GET /api/user/:id/followers` | 可选 | 粉丝列表 |
+| `getFollowing(userId)` | `GET /api/user/:id/following` | 可选 | 关注列表 |
 
 ### 3.3 FollowListPage 数据流
 
@@ -85,9 +103,9 @@ Follow { id, followerId, followingId, createdAt }
   supabase.auth.getSession() → 取当前userId
   ├─ followApi.getFollowingCount() → 显示关注数
   ├─ followApi.getFollowerCount()  → 显示粉丝数
-  └─ supabase.from("follows").select("following_id") → 关注列表
+  └─ followApi.getFollowing() → 关注列表
 
-粉丝列表: supabase.from("follows").select("follower_id") → 粉丝列表
+粉丝列表: followApi.getFollowers() → 粉丝列表
   └─ 交叉比对关注列表，判断是否已回关
 
 关注/取关: 乐观更新 + API调用失败自动回滚
@@ -169,33 +187,179 @@ Follow { id, followerId, followingId, createdAt }
 
 | 改进项 | 现状 | 方案 |
 |--------|------|------|
-| 发帖后的非空提示 | 当前按"发布"后无反馈 | 空内容时按钮置灰（`disabled`），提前拦截 |
+| 发帖按钮置灰/中间态 | ✅ 已实现：空内容按钮置灰 + Posting 状态 | — |
 | 关注/取关按钮防抖 | 无 | 添加 300ms 防抖，防止连点导致重复请求 |
-| 列表加载骨架屏 | 转圈 Loader | 改为骨架屏 Skeleton 组件（已引入 shadcn/ui Skeleton） |
-| 社区Tab"关注" | 仅过滤 `verified` | 改为真实关注用户的动态流（需后端支持） |
+| 列表加载骨架屏 | ✅ 已实现：CommunityPage 帖子列表 Skeleton | 其他列表可按需迁移 |
+| 社区Tab"关注" | 已接 `feed=following` | 建议后续补分页与下拉刷新 |
 
 ---
 
-## 六、待完成功能清单（P1 / P2）
+## 六、Material Design 3 视觉重构（Phase 2.5）
 
-| 优先级 | 功能 | 涉及文件 | 依赖 |
-|--------|------|---------|------|
-| **P1** | 社区"关注"Tab → 真实关注流 | CommunityPage.tsx | 需要后端 `/api/posts?feed=following` 接口 |
-| **P1** | 近7天使用时长图表 | UsageStatsPage.tsx | 需要后端 `/api/user/stats/daily` 接口 |
-| **P1** | 积分抽奖/商城/会员快捷入口 | PointsPage.tsx | 产品设计确认 |
-| **P2** | FollowListPage 用户名展示（非ID） | FollowListPage.tsx | 需要后端 `/api/user/:id/basic` 批量查询接口 |
-| **P2** | 好友系统 | 全新增 | 架构设计确认（是否区别于关注） |
-| **P2** | SignLanguageHistory 移除Mock模式 | SignLanguageHistoryPage.tsx | 后端 WS 服务稳定 |
+### 6.1 设计体系
+
+基于 MD3 Design Tokens 建立统一的色彩、字体、圆角、阴影体系，文件位于 [theme.css](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/styles/theme.css)。
+
+| Token 类别 | 核心变量 | 说明 |
+|-----------|---------|------|
+| 色彩体系 | `--md-sys-color-*` (30+ tokens) | 以蓝色(#0061a4)为 seed 色生成的完整 MD3 调色板 |
+| 字体层级 | `--md-sys-typescale-*` (15 levels) | display / headline / title / body / label 五组，含 small/medium/large |
+| 阴影层级 | `--md-sys-elevation-level1~3` | 卡片/浮层/对话框三级阴影 |
+| 表面容器 | `--md-sys-color-surface-container-*` (5 levels) | lowest → highest 五级表面色，用于卡片/面板差异化 |
+| 圆角 | `--radius` (1rem) | 统一圆角基准，派生 sm/md/lg/xl |
+
+**Tailwind 桥接**：MD3 tokens 通过 `:root` → `--background` / `--primary` 等变量映射到 Tailwind v4 `@theme inline`，实现双向兼容。
+
+### 6.2 组件级视觉规范
+
+| 组件 | 视觉策略 |
+|------|---------|
+| 底部导航 `BottomNav` | MD3 NavigationBar 风格：圆形高亮指示器 + 标签文字 + Surface Container 背景 |
+| 顶部标题栏 | `app-topbar` 类：Surface 背景 + 底部 border + level1 阴影 |
+| 卡片 | `app-panel`（基础）/ `app-panel-strong`（强调）/ `app-soft-card`（弱化）三档 |
+| 页面标题 | 统一 `text-[length:--md-sys-typescale-title-large-size] font-medium` |
+| 按钮 | Primary Container 填充 + On-Primary-Container 文字 |
+| 开关 | MD3 Switch 风格：`--switch-background` 映射到 `--md-sys-color-surface-variant` |
+
+### 6.3 已覆盖页面
+
+所有 5 个底部 Tab 页面 + 全部二级页面均已应用 MD3 视觉规范：
+
+- ✅ SignLanguagePage（手语识别首屏）
+- ✅ HomePage（OCR 文字识别）
+- ✅ SoundDetectionPage（环境音感知）
+- ✅ CommunityPage（社区）+ PostDetailPage（帖子详情）
+- ✅ ProfilePage（个人中心）+ EditProfilePage + FollowListPage + PointsPage + AchievementsPage + UsageStatsPage + PrivacySettingsPage + HelpPage + AgreementPage
 
 ---
 
-## 七、环境变量说明
+## 七、Phase 2.5 Bug 修复详情
+
+### 7.1 社区评论误判未登录
+
+**问题**：已登录用户评论自己帖子时被误判为未登录，弹出"请先登录"提示。
+
+**根因**：评论提交和积分记录在同一个 `try/catch` 中，积分接口鉴权失败将评论结果污染为认证错误。
+
+**修复**：
+- 评论成功立即更新 UI 状态（不等待积分接口）
+- 积分记录 (`pointsApi.add()`) 置于独立 `try/catch`，失败不影响评论结果
+- 发帖接口前后端均追加强制鉴权，防止未登录可发帖
+
+### 7.2 音量检测 100% 问题
+
+**问题**：进入声音感知页面后音量立即飙升至 100%。
+
+**根因**：`GainNode` 增益值设置过高，模拟音频输入振幅被放大到满幅。
+
+**修复**：在 [SoundDetectionPage.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/pages/SoundDetectionPage.tsx) 中将 `gain.value` 从初始值调低至合理范围。
+
+### 7.3 随机登出问题
+
+**问题**：已登录用户在社区/个人页面频繁被跳转到登录页。
+
+**根因**（三处连锁触发）：
+1. `Root.tsx` 路由守卫在 `INITIAL_SESSION` 事件中 `!session` 时强制 `navigate("/login")`
+2. `api.ts` 的 `apiCall()` 在 401 后直接 `throw Error("认证失败，请重新登录")`
+3. UI 组件层 catch 块捕获认证错误后调 `navigate("/login")`
+
+**修复**：
+- Root 守卫：移除 `!session` 时的强制跳转，改为静默等待
+- apiCall：401 后自动刷新 token + 降级 anon key 重试，而非直接抛错
+- apiCall：requireAuth=false 时返回 `{}` 而非抛错
+- Token 恢复后立即回写 `cachedAuthToken` 缓存
+- 增加 `x-user-jwt` 头处理 ES256 JWT 绕过 Supabase API Gateway 限制
+
+### 7.4 API 层容错加固
+
+| 改进项 | 实现 |
+|--------|------|
+| 请求超时 | `AbortController` + 12s 超时 → `"请求超时，请稍后重试"` |
+| AbortError | 单独捕获，区别于网络错误 |
+| 非 JSON 响应 | `parseResponseBody()` 检测 `content-type`，非 JSON 返回 `{ error: text }` |
+| 网络失败 | `"网络连接失败，请检查网络后重试"` 友好提示 |
+| 调试上报 | `VITE_ENABLE_DEBUG_TELEMETRY=true` 显式开启，默认关闭 |
+
+### 7.5 社区页面错误态
+
+[CommunityPage.tsx](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/src/app/pages/CommunityPage.tsx) 新增：
+
+- `recommendedError` / `followingError` 状态变量
+- 帖子列表空 + 有错误时渲染错误提示 + "重新加载"按钮
+- 异常仅影响当前页面，不再触发全局路由跳转
+
+---
+
+## 八、API 双模式运行
+
+### 8.1 架构说明
+
+前端支持两种运行时 API 目标，通过 `VITE_API_BASE_URL` 环境变量切换：
+
+```
+模式 A：Supabase Edge Function（生产/默认）
+  frontend ── /edge (Vite 同源代理) ── https://xxx.supabase.co/functions/v1/api
+  
+模式 B：本地 Express 后端（开发/调试）
+  frontend ── http://localhost:3001 ── Express + Prisma + Supabase Postgres
+```
+
+| 模式 | `VITE_API_BASE_URL` | 配置文件 | 适用场景 |
+|------|---------------------|---------|---------|
+| **A — Edge Function** | `/edge`（默认） | `.env.local` | 无需启动本地后端，直连 Supabase 部署 |
+| **B — 本地后端** | `http://localhost:3001` | `.env.local` | 本地调试、数据库直连验证、断点排查 |
+
+### 8.2 模式切换
+
+编辑 [frontend/.env.local](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/.env.local)：
+
+```env
+# 模式 A（默认，无需修改）
+VITE_API_BASE_URL="/edge"
+
+# 模式 B（需先启动本地后端 npm run dev）
+# VITE_API_BASE_URL="http://localhost:3001"
+```
+
+### 8.3 Vite 代理配置
+
+[`/edge` 同源代理](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/frontend/vite.config.ts) 将 `/edge` 前缀的请求转发到 Supabase Edge Function，消除浏览器跨域限制。
+
+---
+
+## 九、环境变量说明
 
 | 变量 | 用途 | 默认值 |
 |------|------|--------|
-| `VITE_API_URL` | REST API 基础路径 | 开发：`http://localhost:3001/api`<br>生产：自动 fallback 到 Supabase Edge Function |
+| `VITE_API_BASE_URL` | REST API 基础路径 | `/edge`（Vite 同源代理 → Supabase Edge Function）<br>可选：`http://localhost:3001`（本地 Express 后端） |
+| `VITE_ENABLE_DEBUG_TELEMETRY` | 调试上报开关 | （不设置 = 关闭）<br>开发调试时设 `true` 开启，上报到 `127.0.0.1:3939/log` |
+| `VITE_HANDCHAT_WS_URL` | WebSocket 地址 | `ws://localhost:3001` |
+| `VITE_HANDCHAT_API_URL` | HandChat 模块 API 地址 | `https://<project>.supabase.co/functions/v1/api` |
 
-开发环境无需手动创建 `.env`，代码已自动检测 `import.meta.env.DEV` 并使用 `localhost:3001`。
+---
+
+## 十、功能清单（完成状态）
+
+### 10.1 已完成 ✅
+
+| 优先级 | 功能 | 涉及文件 | 完成日期 |
+|--------|------|---------|----------|
+| **P1** | 社区收藏持久化 | api.ts + CommunityPage.tsx + postService.ts + userRoutes.ts | 2026-05-19 |
+| **P1** | 点赞去重（toggle 模式） | api.ts + CommunityPage.tsx + postService.ts + postRoutes.ts | 2026-05-19 |
+| **P1** | 帖子编辑功能 | api.ts + postService.ts + postRoutes.ts | 2026-05-19 |
+| **P1** | 关注流（following feed） | api.ts + CommunityPage.tsx + postService.ts + postRoutes.ts | 2026-05-19 |
+| **P1** | 社区会话校准（评论/点赞/收藏前主动校验登录态） | CommunityPage.tsx | 2026-05-18 |
+| **P1** | 帖子本地持久化兜底（sessionStorage） | CommunityPage.tsx | 2026-05-18 |
+| **P1** | 关注/粉丝真实列表接口 | followRoutes.ts + FollowListPage.tsx | 2026-05-19 |
+| **P1** | 内容审核（违禁词 + 刷屏检测） | moderationService.ts + postRoutes.ts | 2026-05-19 |
+
+### 10.2 待完成
+
+| 优先级 | 功能 | 涉及文件 | 依赖 |
+|--------|------|---------|------|
+| **P2** | 好友系统 | 全新增 | 架构设计确认（是否区别于关注） |
+| **P2** | 积分抽奖 / 商城 / 会员独立页面 | PointsPage.tsx | 产品设计确认 |
+| **P2** | `/api/posts` 列表性能优化（N+1 收敛 + Redis 缓存） | postService.ts | 数据库查询重构 |
 
 ---
 

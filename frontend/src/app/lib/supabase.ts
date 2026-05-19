@@ -4,5 +4,12 @@ import { projectId, publicAnonKey } from "../../../utils/supabase/info";
 // Create a singleton Supabase client to avoid multiple instances
 export const supabase = createClient(
   `https://${projectId}.supabase.co`,
-  publicAnonKey
+  publicAnonKey,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  }
 );

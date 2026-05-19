@@ -47,38 +47,39 @@
 
 @layer components {
   .app-topbar {
-    background: var(--app-surface-strong);
-    border-bottom: 1px solid var(--app-border-soft);
-    box-shadow: 0 10px 36px rgba(15, 23, 42, 0.05);
-    backdrop-filter: blur(24px);
+    background: var(--md-sys-color-surface);
+    color: var(--md-sys-color-on-surface);
+    border-bottom: 1px solid var(--md-sys-color-surface-variant);
+    box-shadow: var(--md-sys-elevation-level1);
   }
 
   .app-panel {
-    background: var(--app-surface);
-    border: 1px solid var(--app-card-border);
-    box-shadow: var(--app-shadow-sm);
-    backdrop-filter: blur(22px);
+    background: var(--md-sys-color-surface);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--md-sys-shape-corner-medium, 16px);
+    box-shadow: var(--md-sys-elevation-level1);
+    color: var(--md-sys-color-on-surface);
   }
 
   .app-panel-strong {
-    background: var(--app-surface-strong);
-    border: 1px solid var(--app-card-border);
-    box-shadow: var(--app-shadow-md);
-    backdrop-filter: blur(24px);
+    background: var(--md-sys-color-surface-container-high);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--md-sys-shape-corner-large, 20px);
+    box-shadow: var(--md-sys-elevation-level2);
+    color: var(--md-sys-color-on-surface);
   }
 
   .app-pill {
-    background: rgba(255, 255, 255, 0.64);
-    border: 1px solid var(--app-card-border);
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
-    backdrop-filter: blur(16px);
+    background: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+    border-radius: 9999px;
   }
 
   .app-soft-card {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.72) 100%);
-    border: 1px solid var(--app-card-border);
-    box-shadow: var(--app-shadow-sm);
-    backdrop-filter: blur(18px);
+    background: var(--md-sys-color-surface-container-lowest);
+    border: 1px solid var(--md-sys-color-surface-variant);
+    box-shadow: var(--md-sys-elevation-level1);
+    border-radius: var(--md-sys-shape-corner-medium, 16px);
   }
 
   .app-grid-glow {
@@ -91,7 +92,7 @@
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(circle at top right, var(--app-tint-strong), transparent 34%),
+      radial-gradient(circle at top right, var(--md-sys-color-primary-container), transparent 34%),
       radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.08), transparent 28%);
     pointer-events: none;
   }

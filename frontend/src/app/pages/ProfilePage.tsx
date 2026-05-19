@@ -22,6 +22,13 @@ import { supabase } from "../lib/supabase";
 import { userApi } from "../lib/api";
 import { useLanguage } from "../contexts/LanguageContext";
 
+interface UserProfileState {
+  name: string;
+  email: string;
+  id: string;
+  avatarUrl: string;
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { getPageState, setPageState } = useOutletContext<PageStateContext>();
@@ -31,7 +38,7 @@ export default function ProfilePage() {
   const [vibration, setVibration] = useState(savedState.vibration !== undefined ? savedState.vibration : true);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
-  const [userProfile, setUserProfile] = useState<{name: string; email: string; id: string; avatarUrl: string} | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
   const [stats, setStats] = useState({ days: 0, points: 0, achievements: 0, postCount: 0, followingCount: 0, followerCount: 0 });
   const { text, language } = useLanguage();
 
@@ -44,66 +51,98 @@ export default function ProfilePage() {
           navigate("/login");
           return;
         }
-        
+
         const meta = session.user.user_metadata || {};
-        setUserProfile({
-          name: meta.name || '用户',
+        const fallbackProfile: UserProfileState = {
+          name: meta.name || text("用户", "User"),
           email: session.user.email || '',
           id: session.user.id.substring(0, 8).toUpperCase(),
-          avatarUrl: meta.avatar_url || ''
+          avatarUrl: meta.avatar_url || '',
+        };
+
+        setUserProfile(fallbackProfile);
+
+        const [profileData, statsData, settingsData] = await Promise.all([
+          userApi.getProfile().catch((e: any) => {
+            console.warn("[个人中心] 获取资料失败:", e.message || e);
+            return null;
+          }),
+          userApi.getStats().catch((e: any) => {
+            console.warn("[个人中心] 获取统计失败:", e.message || e);
+            return null;
+          }),
+          userApi.getSettings().catch((e: any) => {
+            console.warn("[个人中心] 获取设置失败:", e.message || e);
+            return null;
+          }),
+        ]);
+
+        setUserProfile({
+          ...fallbackProfile,
+          name: profileData?.nickname || fallbackProfile.name,
+          avatarUrl: profileData?.avatar || fallbackProfile.avatarUrl,
         });
 
-        // 获取用户统计
-        try {
-          const data = await userApi.getStats();
-          if (data.stats) {
-            setStats({
-              days: data.stats.days || 0,
-              points: data.stats.points || 0,
-              achievements: data.stats.achievementCount || data.stats.achievements || 0,
-              postCount: data.stats.postCount || 0,
-              followingCount: data.stats.followingCount || 0,
-              followerCount: data.stats.followerCount || 0,
-            });
-          }
-        } catch (e: any) {
-          console.warn("[个人中心] 获取统计失败 (使用默认值):", e.message || e);
-          // 静默降级，使用默认统计数据，不打扰用户
+        if (statsData?.stats) {
+          setStats({
+            days: statsData.stats.days || 0,
+            points: statsData.stats.points || 0,
+            achievements: statsData.stats.achievementCount || statsData.stats.achievements || 0,
+            postCount: statsData.stats.postCount || 0,
+            followingCount: statsData.stats.followingCount || 0,
+            followerCount: statsData.stats.followerCount || 0,
+          });
+        }
+
+        if (settingsData) {
+          setNotifications(Boolean(settingsData.notification));
+          setVibration(Boolean(settingsData.vibration));
         }
       } catch (error: any) {
         console.error("[个人中心] 获取会话失败:", error);
         // 网络错误时不转登录，显示离线状态
-        setUserProfile({ name: '用户', email: '', id: '--------', avatarUrl: '' });
+        setUserProfile({ name: text("用户", "User"), email: '', id: '--------', avatarUrl: '' });
       }
     };
     fetchData();
 
     // 监听用户数据变化 (从编辑页面返回时)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'USER_UPDATED') {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            const meta = session.user.user_metadata || {};
-            setUserProfile({
-              name: meta.name || '用户',
-              email: session.user.email || '',
-              id: session.user.id.substring(0, 8).toUpperCase(),
-              avatarUrl: meta.avatar_url || ''
-            });
-          }
-        } catch (e) {
-          console.warn('[个人中心] 更新用户信息失败:', e);
-        }
+        void fetchData();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, text]);
 
   useEffect(() => {
     setPageState('profile', { notifications, vibration });
   }, [notifications, vibration, setPageState]);
+
+  const handleNotificationsChange = async (checked: boolean) => {
+    const previous = notifications;
+    setNotifications(checked);
+
+    try {
+      await userApi.updateSettings({ notification: checked });
+    } catch (error: any) {
+      setNotifications(previous);
+      toast.error(error.message || text("通知设置保存失败", "Failed to save notification settings"));
+    }
+  };
+
+  const handleVibrationChange = async (checked: boolean) => {
+    const previous = vibration;
+    setVibration(checked);
+
+    try {
+      await userApi.updateSettings({ vibration: checked });
+    } catch (error: any) {
+      setVibration(previous);
+      toast.error(error.message || text("震动设置保存失败", "Failed to save vibration settings"));
+    }
+  };
 
   const userStats = [
     { label: text("帖子", "Posts"), value: stats.postCount, icon: FileText },
@@ -119,8 +158,8 @@ export default function ProfilePage() {
         { icon: Lock, label: text("修改密码", "Change Password"), action: () => navigate("/change-password"), color: "text-indigo-500", bg: "bg-indigo-50" },
         { icon: Palette, label: text("背景主题", "Theme Background"), action: () => setShowThemeSelector(true), color: "text-purple-500", bg: "bg-purple-50" },
         { icon: Settings, label: text("语言", "Language"), badge: language === "zh" ? "中文" : "English", action: () => setShowLanguageSelector(true), color: "text-cyan-500", bg: "bg-cyan-50" },
-        { icon: Bell, label: text("通知设置", "Notifications"), hasSwitch: true, switchValue: notifications, onSwitchChange: setNotifications, color: "text-red-500", bg: "bg-red-50" },
-        { icon: Settings, label: text("震动提醒", "Vibration"), hasSwitch: true, switchValue: vibration, onSwitchChange: setVibration, color: "text-gray-500", bg: "bg-gray-100" },
+        { icon: Bell, label: text("通知设置", "Notifications"), hasSwitch: true, switchValue: notifications, onSwitchChange: handleNotificationsChange, color: "text-red-500", bg: "bg-red-50" },
+        { icon: Settings, label: text("震动提醒", "Vibration"), hasSwitch: true, switchValue: vibration, onSwitchChange: handleVibrationChange, color: "text-gray-500", bg: "bg-gray-100" },
       ],
     },
     {
@@ -159,9 +198,14 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
       {/* 头部 */}
-      <div className="app-topbar sticky top-0 z-50 flex flex-col items-center justify-end px-4 pt-12 pb-4">
+      <div className="app-topbar sticky top-0 z-50 flex flex-col items-center justify-end px-4 pt-11 pb-3">
         <div className="w-full max-w-2xl">
-          <h1 className="text-[30px] font-bold leading-none tracking-[-0.03em] text-slate-900">{text("个人中心", "Profile")}</h1>
+          <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal text-[var(--md-sys-color-on-surface)]">
+            {text("个人中心", "Profile")}
+          </h1>
+          <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
+            {text("管理资料、偏好与账户设置", "Manage your profile, preferences, and account settings")}
+          </p>
         </div>
       </div>
 
@@ -193,10 +237,8 @@ export default function ProfilePage() {
                 navigate("/profile/follow?tab=following");
               } else if (stat.label === text("粉丝", "Followers")) {
                 navigate("/profile/follow?tab=followers");
-              } else if (stat.label === text("帖子", "Posts")) {
-                navigate("/community");
               } else {
-                toast.info(text(`${stat.label}功能开发中`, `${stat.label} is coming soon`));
+                navigate("/community");
               }
             };
             return (

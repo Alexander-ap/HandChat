@@ -1,8 +1,8 @@
 # HandChat 第二阶段开发计划
 
-> **版本：** v1.0  
-> **编写日期：** 2026-05-17  
-> **冻结接口文档：** [interfaces.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/interfaces.md)  
+> **版本：** v1.1  
+> **编写日期：** 2026-05-17（v1.0） → 2026-05-18（v1.1 进度更新）  
+> **冻结接口文档：** [interfaces.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/interfaces.md) (v1.3)  
 > **适用范围：** 前端（成员A）、模型（成员B）、后端（成员C）
 
 ---
@@ -22,17 +22,20 @@
 
 ### 1.2 当前系统状态总结
 
-通过全面审计，当前系统状态如下：
+> **🆕 更新于 2026-05-19（Phase 2.6 完成后）**
 
 | 模块 | 完成度 | 关键缺口 |
 |------|--------|---------|
 | **前端 handchat 协议层** | 95% | `handPoseDetector.ts` 占位（模型未接入） |
-| **前端页面（核心 5 页）** | 100% | 均真实实现 |
-| **前端页面（辅助 12 页）** | 80% | 部分使用假数据/纯本地状态 |
+| **前端页面（核心 5 页）** | 100% | 均真实实现 + MD3 视觉美化 |
+| **前端页面（辅助 12 页）** | 100% | 收藏/点赞已持久化去重 ✅ |
+| **前端 UI 体系** | 100% | MD3 Design Tokens + 全页面统一标题 ✅ |
+| **前端 API 层** | 100% | 超时/降级/归一化/会话校准/本地兜底 ✅ |
 | **后端 WebSocket** | 100% | 全部 7 种消息类型已实现 |
-| **后端 REST API（核心 3 接口）** | 100% | 完全符合规范 |
-| **后端 REST API（4.2 预留）** | 30% | 仅 posts 接口超前实现 |
-| **后端认证/安全** | 100% | JWT + userId 校验 + 统一 404 |
+| **后端 REST API（Express）** | 100% | 28 端点 + 内容审核 + 限流 + 统一响应 ✅ |
+| **后端 REST API（Edge Function）** | 95% | KV 表持久化已修复（作为备用链路） |
+| **后端认证/安全** | 100% | JWT + ES256 绕过 + CORS 放宽 |
+| **数据库** | 100% | Prisma + Supabase Session Pooler 双模式连接 ✅ |
 | **视觉模型** | 0% | DTW 特征工程 + 模板匹配未实现 |
 
 ---
@@ -380,6 +383,8 @@ model UserAchievement {
 | 里程碑 | 内容 | 状态 |
 |--------|------|------|
 | **M1** | 阶段 A 完成：全部辅助功能接口后端实现 + 前端假数据清除 | ✅ 已完成 (2026-05-17) |
+| **M1.5** | Phase 2.5 稳定性加固：Bug 修复 + UI 重构 + API 容错 + 双模式运行 | ✅ 已完成 (2026-05-18) |
+| **M1.6** | Phase 2.6 社区后端全面落地：数据库迁移 + 收藏/点赞去重 + 内容审核 + 关注流 + 限流 | ✅ 已完成 (2026-05-19) |
 | **M2** | 阶段 B 完成：视觉模型接口占位规范化 | ⏳ 待实施 |
 | **M3** | 阶段 C 完成：全量联调 + 假数据零残留验证 | ⏳ 待实施 |
 
@@ -418,6 +423,45 @@ model UserAchievement {
 | `getBalance` 区分 balance 和 totalEarned | ✅ |
 | 积分历史返回真实总数（`getHistoryTotal`） | ✅ |
 | 发帖/评论添加长度限制校验（title≤200, content≤10000, comment≤5000） | ✅ |
+
+#### 🆕 M1.5：Phase 2.5 稳定性加固 ✅ (2026-05-18)
+
+| 子任务 | 负责方 | 状态 |
+|--------|--------|------|
+| 2.5.1 社区评论误判未登录修复（评论 + 积分解耦） | 前端 | ✅ |
+| 2.5.2 音量检测 100% 修复（GainNode gain.value 调低） | 前端 | ✅ |
+| 2.5.3 随机登出根治（Root 守卫 + apiCall 401 链路切断） | 前端 | ✅ |
+| 2.5.4 API 层容错加固（超时/AbortError/非 JSON/网络失败） | 前端 | ✅ |
+| 2.5.5 社区页面错误态 + 重试按钮 | 前端 | ✅ |
+| 2.5.6 调试上报显式开关（默认关闭） | 前端 | ✅ |
+| 2.5.7 MD3 Material Design 3 全量视觉重构 | 前端 | ✅ |
+| 2.5.8 全页面标题统一（title-large 级别） | 前端 | ✅ |
+| 2.5.9 前后端社区接口契约统一（posts/comments 包装格式） | 全部 | ✅ |
+| 2.5.10 数据持久化修复（Edge Function KV 表错误抛出 + 本地 Prisma 验证） | 后端 | ✅ |
+| 2.5.11 CORS 放宽（本机任意端口）+ origin undefined 类型安全 | 后端 | ✅ |
+| 2.5.12 双模式运行支持（VITE_API_BASE_URL + /edge 代理） | 全部 | ✅ |
+| 2.5.13 帖子详情接口补充（GET /api/posts/:id） | 后端 | ✅ |
+
+#### 🆕 M1.6：Phase 2.6 社区后端全面落地 ✅ (2026-05-19)
+
+| 子任务 | 负责方 | 状态 |
+|--------|--------|------|
+| 2.6.1 数据库迁移至 Supabase Session Pooler (`aws-1-us-east-1.pooler.supabase.com:5432`) | 后端 | ✅ |
+| 2.6.2 `Like` 去重模型（Prisma 迁移 + toggle 接口） | 后端 | ✅ |
+| 2.6.3 `Bookmark` 收藏列表接口（`GET /api/user/bookmarks`） | 后端 | ✅ |
+| 2.6.4 关注流（`GET /api/posts?feed=following`） | 后端 | ✅ |
+| 2.6.5 关注/粉丝真实列表接口（非仅计数） | 后端 | ✅ |
+| 2.6.6 帖子编辑接口（`PUT /api/posts/:id`） | 后端 | ✅ |
+| 2.6.7 内容审核模块（`moderationService`：违禁词 + 刷链接 + 灌水检测） | 后端 | ✅ |
+| 2.6.8 限流中间件（`rateLimit`：按 IP+路径滑动窗口） | 后端 | ✅ |
+| 2.6.9 统一 HTTP 响应与错误处理（`http.ts`：`sendSuccess`/`sendError`） | 后端 | ✅ |
+| 2.6.10 社区页会话校准（评论/点赞/收藏前主动校验登录态） | 前端 | ✅ |
+| 2.6.11 帖子本地持久化兜底（`sessionStorage` 合并策略） | 前端 | ✅ |
+| 2.6.12 集成测试脚本（完整链路：发帖→编辑→评论→审核→关注→收藏→点赞→删除） | 后端 | ✅ |
+| 2.6.13 压力测试脚本（5 轮 × 20 并发，`/health` + `/api/posts`） | 后端 | ✅ |
+| 2.6.14 HTTP 请求日志中间件（requestId + durationMs） | 后端 | ✅ |
+| 2.6.15 Prisma 连接加密处理（`DATABASE_URL_ENCRYPTED` + 解密中间件） | 后端 | ✅ |
+| 2.6.16 前端开发模式切换为社区主 API 走本地 Express（注册/上传保留 Edge） | 前端 | ✅ |
 
 #### M2：模型接口规范化
 
@@ -478,25 +522,32 @@ model UserAchievement {
 
 ## 七、风险与对策
 
-| 风险 | 影响 | 对策 |
-|------|------|------|
-| Supabase Edge Function 路由不支持多路径 | REST API 路由扩展受阻 | 采用 Express 子路由挂载，已在 `index.ts` 中使用 `app.use()` 验证可行 |
-| 前端 `api.ts` 的 Edge Function 地址过期 | 辅助功能 API 调不通 | 同步更新 `API_BASE`，或迁移到独立后端地址 |
-| 视觉模型开发延迟 | 实时手语识别无法使用 | `handPoseDetector.ts` 占位不影响其他功能前后端联调 |
-| 后端 `node_modules` 体积大（376MB） | 部署/构建耗时 | 已完成 `npm prune --production`，进一步用 `pnpm` 可再减 |
+| 风险 | 影响 | 对策 | 状态 |
+|------|------|------|------|
+| Supabase Edge Function 路由不支持多路径 | REST API 路由扩展受阻 | 采用 Express 子路由挂载，已在 `index.ts` 中使用 `app.use()` 验证可行 | ✅ 已验证 |
+| 前端 `api.ts` 的 Edge Function 地址过期 | 辅助功能 API 调不通 | 同步更新 `API_BASE`，支持 `VITE_API_BASE_URL` 环境变量覆盖 | ✅ 已修复 (Phase 2.5) |
+| Edge Function KV 表写入失败静默吞错 | 用户数据未实际保存 | `safeKv.set/get/del` 全部改为抛出明确错误 | ✅ 已修复 (Phase 2.5) |
+| ES256 JWT 被 Supabase API Gateway 拒绝 | 社区等接口鉴权失败 | `x-user-jwt` 头绕过 + ES256 检测自动切换 | ✅ 已修复 (Phase 2.5) |
+| CORS 导致本地直连后端被拦截 | 开发调试受阻 | 放宽 CORS 允许本机任意端口 | ✅ 已修复 (Phase 2.5) |
+| 视觉模型开发延迟 | 实时手语识别无法使用 | `handPoseDetector.ts` 占位不影响其他功能前后端联调 | ⏳ 持续关注 |
+| 后端 `node_modules` 体积大（376MB） | 部署/构建耗时 | 已完成 `npm prune --production`，进一步用 `pnpm` 可再减 | 📌 非紧急 |
 
 ---
 
 ## 附录 A：当前系统审计清单
 
-### A1. 前端模块审计
+### A1. 前端模块审计（更新于 2026-05-18）
 
 | 模块 | 文件 | 状态 |
 |------|------|------|
-| 类型定义 | `handchat/types.ts` | ✅ 100% — 与 interfaces.md 完全对应 |
+| 类型定义 | `handchat/types.ts` | ✅ 100% — 与 interfaces.md v1.3 完全对应 |
 | WebSocket 客户端 | `handchat/wsClient.ts` | ✅ 100% — 连接/心跳/重连/全消息类型 |
 | 帧采集 | `handchat/protocol/capture.ts` + `frame.ts` | ✅ 100% — 256×256 JPEG quality 85 |
 | 关键点协议 | `handchat/protocol/keypoints.ts` | ✅ 100% — 归一化 21 点 |
+| API 请求层 | `lib/api.ts` | ✅ 100% — 双模式/超时/归一化/ES256 绕过 |
+| MD3 主题 | `styles/theme.css` | ✅ 100% — 30+ tokens + Tailwind v4 桥接 |
+| 底部导航 | `components/BottomNav.tsx` | ✅ 100% — MD3 NavigationBar 风格 |
+| 全部页面 | `pages/*.tsx` | ✅ 100% — MD3 视觉规范 + 统一标题体系 |
 | 手势确认 | `handchat/recognition/signConfirm.ts` | ✅ 100% — 连续 N 帧确认 |
 | 翻译流 | `handchat/translationState.ts` | ✅ 100% — partial/final/sentence_end |
 | 错误映射 | `handchat/errorMapping.ts` | ✅ 100% — 6 个错误码 |

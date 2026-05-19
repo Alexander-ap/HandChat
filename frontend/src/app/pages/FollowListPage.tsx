@@ -9,16 +9,19 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ArrowLeft, Users, UserPlus, UserMinus, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { Avatar, AvatarFallback } from "../components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
-import { followApi } from "../lib/api";
+import { followApi, userApi } from "../lib/api";
 
 /** 列表中的用户数据结构 */
 interface FollowUser {
   userId: string;
   displayId: string;
+  name: string;
+  subtitle: string;
+  avatarUrl: string;
   isFollowing: boolean;
   loading: boolean;
 }
@@ -40,6 +43,40 @@ export default function FollowListPage() {
   const [followerCount, setFollowerCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
+  const buildUsers = useCallback(async (userIds: string[], followingIds: Set<string>) => {
+    return Promise.all(
+      userIds.map(async (id) => {
+        const displayId = shortId(id);
+
+        try {
+          const basic = await userApi.getBasic(id);
+          const nickname = basic?.nickname?.trim();
+
+          return {
+            userId: id,
+            displayId,
+            name: nickname || `ID: ${displayId}`,
+            subtitle: nickname ? `ID: ${displayId}` : "手语用户",
+            avatarUrl: basic?.avatar || "",
+            isFollowing: followingIds.has(id),
+            loading: false,
+          };
+        } catch (e: any) {
+          console.warn("[关注列表] 获取用户资料失败:", id, e.message || e);
+          return {
+            userId: id,
+            displayId,
+            name: `ID: ${displayId}`,
+            subtitle: "手语用户",
+            avatarUrl: "",
+            isFollowing: followingIds.has(id),
+            loading: false,
+          };
+        }
+      })
+    );
+  }, []);
+
   /** 切换Tab */
   const handleTabChange = (value: string) => {
     setSearchParams(value === "followers" ? { tab: "followers" } : { tab: "following" });
@@ -48,56 +85,34 @@ export default function FollowListPage() {
   /** 获取关注列表 */
   const fetchFollowing = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", userId);
-
-      if (error) throw error;
-
-      const userIds: string[] = (data || []).map((row: any) => row.following_id);
-      const users: FollowUser[] = userIds.map((id) => ({
-        userId: id,
-        displayId: shortId(id),
-        isFollowing: true,
-        loading: false,
-      }));
+      const data = await followApi.getFollowing(userId);
+      const userIds: string[] = (data.users || []).map((row: any) => row.userId).filter(Boolean);
+      const users = await buildUsers(userIds, new Set(userIds));
       setFollowingList(users);
     } catch (e: any) {
       console.warn("[关注列表] 获取关注列表失败:", e.message || e);
       setFollowingList([]);
     }
-  }, []);
+  }, [buildUsers]);
 
   /** 获取粉丝列表 */
   const fetchFollowers = useCallback(async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from("follows")
-        .select("follower_id")
-        .eq("following_id", userId);
-
-      if (error) throw error;
-
-      const followerIds: string[] = (data || []).map((row: any) => row.follower_id);
+      const data = await followApi.getFollowers(userId);
+      const followerIds: string[] = (data.users || []).map((row: any) => row.userId).filter(Boolean);
 
       // 对于粉丝列表，需要判断是否已关注他们
       const followingIds = new Set(
         followingList.map((u) => u.userId)
       );
 
-      const users: FollowUser[] = followerIds.map((id) => ({
-        userId: id,
-        displayId: shortId(id),
-        isFollowing: followingIds.has(id),
-        loading: false,
-      }));
+      const users = await buildUsers(followerIds, followingIds);
       setFollowerList(users);
     } catch (e: any) {
       console.warn("[关注列表] 获取粉丝列表失败:", e.message || e);
       setFollowerList([]);
     }
-  }, [followingList]);
+  }, [buildUsers, followingList]);
 
   /** 初始化数据 */
   useEffect(() => {
@@ -227,15 +242,16 @@ export default function FollowListPage() {
       className="bg-white rounded-[14px] p-3.5 shadow-sm flex items-center gap-3.5"
     >
       <Avatar className="w-11 h-11 flex-shrink-0">
+        <AvatarImage src={user.avatarUrl} className="object-cover" />
         <AvatarFallback className="bg-gray-100 text-gray-500 text-[15px] font-medium">
-          <Users className="w-5 h-5" />
+          {user.name.charAt(0)}
         </AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
         <h3 className="text-[15px] font-semibold text-black truncate">
-          ID: {user.displayId}
+          {user.name}
         </h3>
-        <p className="text-[12px] text-gray-400 truncate">手语用户</p>
+        <p className="text-[12px] text-gray-400 truncate">{user.subtitle}</p>
       </div>
       <Button
         variant={user.isFollowing ? "outline" : "default"}

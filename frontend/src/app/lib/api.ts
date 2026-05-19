@@ -11,17 +11,127 @@ import { projectId, publicAnonKey } from '/utils/supabase/info';
 import { supabase } from './supabase';
 
 /** API 基础地址 */
-const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-481f4acb`;
+const EDGE_FUNCTION_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-481f4acb`;
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").trim() || (
+  import.meta.env.DEV
+    ? `http://localhost:3001/api`
+    : EDGE_FUNCTION_BASE
+);
+const EDGE_ONLY_BASE = (import.meta.env.VITE_EDGE_API_BASE_URL || "").trim() || EDGE_FUNCTION_BASE;
+
+//#region debug-point follow-auth-after-login
+const __ENABLE_DEBUG_REPORT__ = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEBUG_TELEMETRY === "true";
+const __DBG_URL__ = "http://127.0.0.1:3939/log";
+async function __dbgReport__(payload: Record<string, any>) {
+  if (!__ENABLE_DEBUG_REPORT__) return;
+  try {
+    await fetch(__DBG_URL__, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "follow-auth-after-login",
+        src: "frontend",
+        ...payload,
+      }),
+    });
+  } catch (_) {}
+}
+
+function __dbgJwtMeta__(token: string | null) {
+  if (!token) return { hasToken: false };
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return { hasToken: true, jwt: "invalid" };
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(base64Url.length / 4) * 4, "=");
+    const json = JSON.parse(atob(base64));
+    const expMs = typeof json.exp === "number" ? json.exp * 1000 : null;
+    return {
+      hasToken: true,
+      sub: json.sub,
+      exp: json.exp,
+      expMs,
+      expInMs: expMs ? expMs - Date.now() : null,
+      aud: json.aud,
+      iss: json.iss,
+    };
+  } catch (_) {
+    return { hasToken: true, jwt: "unparseable" };
+  }
+}
+//#endregion debug-point follow-auth-after-login
 
 // ============================================================
 // 基础工具函数
 // ============================================================
 
+function normalizeAuthor(author: any, avatar?: string) {
+  if (author && typeof author === "object") {
+    return {
+      name: author.name || author.nickname || "匿名用户",
+      avatar: author.avatar || avatar || "",
+      verified: Boolean(author.verified),
+    };
+  }
+
+  return {
+    name: typeof author === "string" && author.trim() ? author : "匿名用户",
+    avatar: avatar || "",
+    verified: false,
+  };
+}
+
+function normalizePost(post: any) {
+  if (!post || typeof post !== "object") return post;
+  return {
+    ...post,
+    author: normalizeAuthor(post.author ?? post.authorName ?? post.authorId, post.avatar),
+    images: Array.isArray(post.images) ? post.images : [],
+    comments: Number(post.comments ?? post.commentCount ?? 0),
+    shares: Number(post.shares ?? 0),
+    likes: Number(post.likes ?? 0),
+    isLiked: Boolean(post.isLiked),
+    isBookmarked: Boolean(post.isBookmarked),
+    timeAgo: post.timeAgo || "刚刚",
+  };
+}
+
+function normalizeComment(comment: any) {
+  if (!comment || typeof comment !== "object") return comment;
+  return {
+    ...comment,
+    author: normalizeAuthor(comment.author ?? comment.authorName ?? comment.authorId, comment.avatar),
+    likes: Number(comment.likes ?? 0),
+    timeAgo: comment.timeAgo || "刚刚",
+  };
+}
+
 let cachedAuthToken: string | null = null;
+const API_TIMEOUT_MS = 12000;
+
+async function parseResponseBody(response: Response) {
+  if (response.status === 204) return null;
+
+  const contentType = response.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+
+  if (isJson) {
+    return response.json().catch(() => null);
+  }
+
+  const text = await response.text().catch(() => "");
+  return text ? { error: text } : null;
+}
 
 /** 供外部（如 Root.tsx）同步最新 token，避免 getSession 读取延迟 */
 export function syncAuthToken(token: string | null) {
   cachedAuthToken = token;
+  //#region debug-point follow-auth-after-login
+  void __dbgReport__({
+    evt: "syncAuthToken",
+    tokenMeta: __dbgJwtMeta__(token),
+  });
+  //#endregion debug-point follow-auth-after-login
 }
 
 /**
@@ -33,6 +143,15 @@ async function getAuthToken(): Promise<string | null> {
   try {
     // 第一步：从缓存获取 session
     const { data: { session } } = await supabase.auth.getSession();
+    //#region debug-point follow-auth-after-login
+    void __dbgReport__({
+      evt: "getAuthToken.getSession",
+      hasSession: Boolean(session),
+      expiresAt: session?.expires_at ?? null,
+      expiresInMs: session?.expires_at ? session.expires_at * 1000 - Date.now() : null,
+      tokenMeta: __dbgJwtMeta__(session?.access_token ?? null),
+    });
+    //#endregion debug-point follow-auth-after-login
     
     if (session?.access_token) {
       cachedAuthToken = session.access_token;
@@ -45,12 +164,27 @@ async function getAuthToken(): Promise<string | null> {
       // 尝试刷新
       try {
         const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+        //#region debug-point follow-auth-after-login
+        void __dbgReport__({
+          evt: "getAuthToken.refreshSession",
+          hasSession: Boolean(refreshed),
+          expiresAt: refreshed?.expires_at ?? null,
+          expiresInMs: refreshed?.expires_at ? refreshed.expires_at * 1000 - Date.now() : null,
+          tokenMeta: __dbgJwtMeta__(refreshed?.access_token ?? null),
+        });
+        //#endregion debug-point follow-auth-after-login
         if (refreshed?.access_token) {
           cachedAuthToken = refreshed.access_token;
           return refreshed.access_token;
         }
       } catch (e) {
         console.warn('[API] Token刷新失败，使用现有token');
+        //#region debug-point follow-auth-after-login
+        void __dbgReport__({
+          evt: "getAuthToken.refreshSession.error",
+          message: (e as any)?.message ?? String(e),
+        });
+        //#endregion debug-point follow-auth-after-login
       }
       return session.access_token;
     }
@@ -58,6 +192,12 @@ async function getAuthToken(): Promise<string | null> {
     return null;
   } catch (error) {
     console.warn('[API] 获取认证Token失败:', error);
+    //#region debug-point follow-auth-after-login
+    void __dbgReport__({
+      evt: "getAuthToken.error",
+      message: (error as any)?.message ?? String(error),
+    });
+    //#endregion debug-point follow-auth-after-login
     return null;
   }
 }
@@ -71,39 +211,108 @@ async function getAuthToken(): Promise<string | null> {
  */
 async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth = true) {
   let token = await getAuthToken();
+  //#region debug-point follow-auth-after-login
+  void __dbgReport__({
+    evt: "apiCall.begin",
+    endpoint,
+    requireAuth,
+    tokenMeta: __dbgJwtMeta__(token),
+  });
+  //#endregion debug-point follow-auth-after-login
   
   // requireAuth=true 但无 token → 抛错
   if (requireAuth && !token) {
     // try one more time to recover session from local storage before throwing error
     const { data: { session } } = await supabase.auth.getSession();
+    //#region debug-point follow-auth-after-login
+    void __dbgReport__({
+      evt: "apiCall.noToken.regetSession",
+      endpoint,
+      hasSession: Boolean(session),
+      tokenMeta: __dbgJwtMeta__(session?.access_token ?? null),
+    });
+    //#endregion debug-point follow-auth-after-login
     if (session?.access_token) {
+      cachedAuthToken = session.access_token;
       token = session.access_token;
     } else {
       throw new Error('未登录或登录已过期，请重新登录');
     }
   }
   
-  // 构建 headers — 有 token 就用 token，否则用 anon key
-  const buildHeaders = (t: string | null): HeadersInit => ({
-    'Content-Type': 'application/json',
-    'Authorization': t ? `Bearer ${t}` : `Bearer ${publicAnonKey}`,
-    'apikey': publicAnonKey,
-    ...options.headers,
-  });
+  const getJwtAlg = (t: string | null) => {
+    if (!t) return null;
+    try {
+      const base64Url = t.split(".")[0];
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(base64Url.length / 4) * 4, "=");
+      const header = JSON.parse(atob(base64));
+      return header?.alg || null;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const buildHeaders = (t: string | null): HeadersInit => {
+    const alg = getJwtAlg(t);
+    const useSupabaseEdgeWorkaround = Boolean(t) && alg === "ES256";
+    return {
+      "Content-Type": "application/json",
+      Authorization: useSupabaseEdgeWorkaround ? `Bearer ${publicAnonKey}` : t ? `Bearer ${t}` : `Bearer ${publicAnonKey}`,
+      apikey: publicAnonKey,
+      ...(useSupabaseEdgeWorkaround ? { "x-user-jwt": t } : {}),
+      ...options.headers,
+    };
+  };
 
   let response: Response;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   try {
     response = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
+      signal: options.signal ?? controller.signal,
       headers: buildHeaders(token),
     });
+    //#region debug-point follow-auth-after-login
+    void __dbgReport__({
+      evt: "apiCall.response",
+      endpoint,
+      requireAuth,
+      status: response.status,
+    });
+    //#endregion debug-point follow-auth-after-login
   } catch (networkError: any) {
     console.warn('[API] 网络请求失败:', endpoint, networkError);
+    //#region debug-point follow-auth-after-login
+    void __dbgReport__({
+      evt: "apiCall.networkError",
+      endpoint,
+      message: networkError?.message ?? String(networkError),
+    });
+    //#endregion debug-point follow-auth-after-login
+    if (networkError?.name === 'AbortError') {
+      throw new Error('请求超时，请稍后重试');
+    }
     throw new Error(`网络连接失败，请检查网络后重试`);
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 
   // ── 401 自动重试逻辑 ──
   if (response.status === 401) {
+    //#region debug-point follow-auth-after-login
+    let body: any = null;
+    try {
+      body = await response.clone().json();
+    } catch (_) {}
+    void __dbgReport__({
+      evt: "apiCall.401",
+      endpoint,
+      requireAuth,
+      body,
+      tokenMeta: __dbgJwtMeta__(token),
+    });
+    //#endregion debug-point follow-auth-after-login
     // 尝试刷新 token 后重试一次
     try {
       const { data: { session: refreshed } } = await supabase.auth.refreshSession();
@@ -113,12 +322,27 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
           ...options,
           headers: buildHeaders(token),
         });
+        //#region debug-point follow-auth-after-login
+        void __dbgReport__({
+          evt: "apiCall.401.retryResponse",
+          endpoint,
+          status: retryResponse.status,
+          tokenMeta: __dbgJwtMeta__(token),
+        });
+        //#endregion debug-point follow-auth-after-login
         if (retryResponse.ok) {
-          return retryResponse.json();
+          return parseResponseBody(retryResponse);
         }
       }
     } catch (e) {
       // 刷新失败
+      //#region debug-point follow-auth-after-login
+      void __dbgReport__({
+        evt: "apiCall.401.refresh.error",
+        endpoint,
+        message: (e as any)?.message ?? String(e),
+      });
+      //#endregion debug-point follow-auth-after-login
     }
 
     // requireAuth=false 时用 anon key 做最后尝试
@@ -134,6 +358,13 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
 
     // 所有重试都失败
     if (requireAuth) {
+      cachedAuthToken = null;
+      //#region debug-point follow-auth-after-login
+      void __dbgReport__({
+        evt: "apiCall.401.finalFail",
+        endpoint,
+      });
+      //#endregion debug-point follow-auth-after-login
       throw new Error('认证失败，请重新登录');
     }
     // 非必须认证 → 返回空结果而非抛错
@@ -141,11 +372,11 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: '网络错误' }));
+    const error = await parseResponseBody(response);
     throw new Error(error.error || `HTTP error ${response.status}`);
   }
 
-  return response.json();
+  return parseResponseBody(response);
 }
 
 // ============================================================
@@ -154,6 +385,10 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
 
 /** 用户资料相关接口 */
 export const userApi = {
+  async getProfile() {
+    return apiCall('/user/profile')
+  },
+
   /**
    * 更新用户资料
    * 失败时自动降级到 Supabase 客户端直接更新
@@ -207,6 +442,34 @@ export const userApi = {
     }
   },
 
+  async getSettings() {
+    return apiCall('/user/settings')
+  },
+
+  async updateSettings(data: {
+    notification?: boolean
+    vibration?: boolean
+    language?: string
+  }) {
+    return apiCall('/user/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async getDailyStats(days = 7) {
+    const data = await apiCall(`/user/stats/daily?days=${days}`)
+    return Array.isArray(data) ? data : []
+  },
+
+  async getBasic(userId: string) {
+    return apiCall(`/user/${userId}/basic`, {}, false)
+  },
+
+  async getBookmarks(limit = 20, offset = 0) {
+    return apiCall(`/user/bookmarks?limit=${limit}&offset=${offset}`)
+  },
+
   /** 获取积分明细列表 */
   async getPointsHistory() {
     try {
@@ -255,6 +518,14 @@ export const followApi = {
 
   async isFollowing(userId: string) {
     return apiCall(`/user/${userId}/is-following`)
+  },
+
+  async getFollowers(userId: string) {
+    return apiCall(`/user/${userId}/followers`, {}, false)
+  },
+
+  async getFollowing(userId: string) {
+    return apiCall(`/user/${userId}/following`, {}, false)
   },
 };
 
@@ -363,15 +634,35 @@ export const postsApi = {
     avatar?: string; 
     images?: string[] 
   }) {
-    return apiCall('/posts', {
+    const response = await apiCall('/posts', {
       method: 'POST',
       body: JSON.stringify(data),
-    }, false);
+    });
+    if (response?.success && response?.post) {
+      return { ...response, post: normalizePost(response.post) };
+    }
+    if (response?.id) {
+      return { success: true, post: normalizePost(response) };
+    }
+    return response;
   },
 
-  /** 获取所有帖子列表 */
-  async getAll() {
-    return apiCall('/posts', {}, false);
+  /** 获取帖子列表 */
+  async getAll(feed?: 'following') {
+    const query = feed ? `?feed=${feed}` : ''
+    const response = await apiCall(`/posts${query}`, {}, feed === 'following')
+    if (Array.isArray(response)) {
+      return { posts: response.map(normalizePost) }
+    }
+    if (Array.isArray(response?.posts)) {
+      return { ...response, posts: response.posts.map(normalizePost) }
+    }
+    return { posts: [] }
+  },
+
+  /** 获取单条帖子详情 */
+  async getById(postId: string) {
+    return apiCall(`/posts/${postId}`, {}, false)
   },
 
   /** 删除帖子 */
@@ -399,15 +690,29 @@ export const postsApi = {
    * 添加评论
    */
   async addComment(postId: string, content: string) {
-    return apiCall(`/posts/${postId}/comments`, {
+    const response = await apiCall(`/posts/${postId}/comments`, {
       method: 'POST',
       body: JSON.stringify({ content }),
     });
+    if (response?.success && response?.comment) {
+      return { ...response, comment: normalizeComment(response.comment) };
+    }
+    if (response?.id) {
+      return { success: true, comment: normalizeComment(response) };
+    }
+    return response;
   },
 
   /** 获取帖子评论列表 */
   async getComments(postId: string) {
-    return apiCall(`/posts/${postId}/comments`, {}, false);
+    const response = await apiCall(`/posts/${postId}/comments`, {}, false);
+    if (Array.isArray(response)) {
+      return { comments: response.map(normalizeComment) };
+    }
+    if (Array.isArray(response?.comments)) {
+      return { ...response, comments: response.comments.map(normalizeComment) };
+    }
+    return { comments: [] };
   },
 };
 
@@ -429,11 +734,26 @@ export const uploadApi = {
     const formData = new FormData();
     formData.append('file', file);
 
+    const getJwtAlg = (t: string) => {
+      try {
+        const base64Url = t.split(".")[0];
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(base64Url.length / 4) * 4, "=");
+        const header = JSON.parse(atob(base64));
+        return header?.alg || null;
+      } catch (_) {
+        return null;
+      }
+    };
+
     const doUpload = async (t: string) => {
-      return fetch(`${API_BASE}/upload`, {
+      const alg = getJwtAlg(t);
+      const useSupabaseEdgeWorkaround = alg === "ES256";
+      return fetch(`${EDGE_ONLY_BASE}/upload`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${t}`,
+          ...(useSupabaseEdgeWorkaround
+            ? { Authorization: `Bearer ${publicAnonKey}`, 'x-user-jwt': t }
+            : { Authorization: `Bearer ${t}` }),
           'apikey': publicAnonKey,
         },
         body: formData,
@@ -454,10 +774,14 @@ export const uploadApi = {
         if (session?.access_token) {
           const formData2 = new FormData();
           formData2.append('file', file);
-          response = await fetch(`${API_BASE}/upload`, {
+          const alg = getJwtAlg(session.access_token);
+          const useSupabaseEdgeWorkaround = alg === "ES256";
+          response = await fetch(`${EDGE_ONLY_BASE}/upload`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${session.access_token}`,
+              ...(useSupabaseEdgeWorkaround
+                ? { Authorization: `Bearer ${publicAnonKey}`, 'x-user-jwt': session.access_token }
+                : { Authorization: `Bearer ${session.access_token}` }),
               'apikey': publicAnonKey,
             },
             body: formData2,
@@ -485,9 +809,19 @@ export const uploadApi = {
 /** 用户注册接口 (通过后端 Admin API 自动确认) */
 export const authApi = {
   async signup(data: { email: string; password: string; name: string }) {
-    return apiCall('/signup', {
+    const response = await fetch(`${EDGE_ONLY_BASE}/signup`, {
       method: 'POST',
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${publicAnonKey}`,
+        apikey: publicAnonKey,
+      },
       body: JSON.stringify(data),
-    }, false);
+    });
+    const body = await parseResponseBody(response);
+    if (!response.ok) {
+      throw new Error(body?.error || `HTTP error ${response.status}`);
+    }
+    return body;
   },
 };

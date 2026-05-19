@@ -1061,13 +1061,15 @@ export default function SignLanguagePage() {
       style={{ background: "var(--app-background, #F2F2F7)" }}
     >
       {/* Header */}
-      <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-12 pb-4">
-        <div className="w-full max-w-2xl flex items-center justify-between">
-          <div>
-            <h1 className="text-[30px] font-bold text-slate-900 mb-1 tracking-[-0.03em]">
+      <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-11 pb-3">
+        <div className="w-full max-w-2xl flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal text-[var(--md-sys-color-on-surface)]">
               {text("手语交互", "Sign Interaction")}
             </h1>
-            <p className="text-[13px] text-slate-500">{text("手语与文字的双向转换", "Two-way conversion between sign language and text")}</p>
+            <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
+              {text("手语与文字的双向转换", "Two-way conversion between sign language and text")}
+            </p>
           </div>
           <button
             onClick={() => setShowLibraryManager(true)}

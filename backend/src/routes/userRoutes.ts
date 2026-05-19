@@ -8,9 +8,24 @@ import {
   getUserStats,
   getDailyStats,
   getUserBasic,
+  getUserBookmarks,
 } from '../services/userService'
 
 const router = Router()
+
+function formatTimeAgo(input: Date | string) {
+  const timestamp = input instanceof Date ? input.getTime() : new Date(input).getTime()
+  const diff = Date.now() - timestamp
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  if (hours < 24) return `${hours}小时前`
+  if (days < 30) return `${days}天前`
+  return `${Math.floor(days / 30)}个月前`
+}
 
 router.get('/profile', authMiddleware, async (req, res, next) => {
   try {
@@ -85,6 +100,37 @@ router.get('/stats/daily', authMiddleware, async (req, res, next) => {
     )
     const stats = await getDailyStats(req.userId!, days)
     res.json(stats)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/bookmarks', authMiddleware, async (req, res, next) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 50)
+    const offset = Math.max(Number(req.query.offset) || 0, 0)
+    const posts = await getUserBookmarks(req.userId!, limit, offset)
+    res.json({
+      posts: posts.map((post) => ({
+        id: post.id,
+        title: post.title,
+        content: post.content,
+        author: {
+          name: post.authorId,
+          avatar: '',
+          verified: true,
+        },
+        authorId: post.authorId,
+        images: [],
+        likes: post.likes,
+        comments: post._count?.comments ?? 0,
+        shares: 0,
+        isLiked: false,
+        isBookmarked: true,
+        timeAgo: formatTimeAgo(post.createdAt),
+        createdAt: post.createdAt.toISOString(),
+      })),
+    })
   } catch (err) {
     next(err)
   }

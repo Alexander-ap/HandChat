@@ -363,7 +363,7 @@ export default function SoundDetectionPage() {
         osc.frequency.setValueAtTime(440, mockCtx.currentTime);
         
         const gainNode = mockCtx.createGain();
-        gainNode.gain.value = 0.1;
+        gainNode.gain.value = 0.02;
         
         osc.connect(gainNode);
         gainNode.connect(dest);
@@ -372,7 +372,7 @@ export default function SoundDetectionPage() {
         // 随机改变音量模拟环境音
         setInterval(() => {
           if (mockCtx.state === 'running') {
-            gainNode.gain.setTargetAtTime(Math.random() * 0.5, mockCtx.currentTime, 0.1);
+            gainNode.gain.setTargetAtTime(Math.random() * 0.08, mockCtx.currentTime, 0.1);
           }
         }, 500);
         
@@ -389,7 +389,8 @@ export default function SoundDetectionPage() {
       analyserRef.current.fftSize = 512;
       
       const bufferLength = analyserRef.current.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
+      const freqArray = new Uint8Array(bufferLength);
+      const timeArray = new Uint8Array(analyserRef.current.fftSize);
 
       // 初始化 MediaRecorder 用于录制音频片段
       try {
@@ -422,16 +423,21 @@ export default function SoundDetectionPage() {
       // 实时音量监测循环
       const updateVolume = () => {
         if (!analyserRef.current) return;
-        analyserRef.current.getByteFrequencyData(dataArray);
-        
-        let sum = 0;
+
+        analyserRef.current.getByteTimeDomainData(timeArray);
+        let sumSquares = 0;
+        for (let i = 0; i < timeArray.length; i++) {
+          const v = timeArray[i] - 128;
+          sumSquares += v * v;
+        }
+        const rms = Math.sqrt(sumSquares / timeArray.length);
+        const volumePercentage = Math.min(100, Math.round((rms / 64) * 100));
+
+        analyserRef.current.getByteFrequencyData(freqArray);
         let max = 0;
         for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
-          max = Math.max(max, dataArray[i]);
+          max = Math.max(max, freqArray[i]);
         }
-        const average = sum / bufferLength;
-        const volumePercentage = Math.min(100, Math.round((average / 128) * 100));
         
         setCurrentVolume(volumePercentage);
 
@@ -564,11 +570,15 @@ export default function SoundDetectionPage() {
   return (
     <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
       {/* Header */}
-      <div className="app-topbar sticky top-0 z-50 flex items-center justify-center px-4 pt-12 pb-4">
+      <div className="app-topbar sticky top-0 z-50 flex items-center justify-center px-4 pt-11 pb-3">
         <div className="w-full max-w-2xl flex items-center">
           <div>
-            <h1 className="mb-1 text-[30px] font-bold tracking-[-0.03em] text-slate-900">{text("环境音感知", "Sound Awareness")}</h1>
-            <p className="text-[13px] text-slate-500">{text("实时监听环境声音并进行智能提醒", "Listen to surrounding sounds in real time and provide smart alerts")}</p>
+            <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal text-[var(--md-sys-color-on-surface)]">
+              {text("环境音感知", "Sound Awareness")}
+            </h1>
+            <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
+              {text("实时监听环境声音并进行智能提醒", "Listen to surrounding sounds in real time and provide smart alerts")}
+            </p>
           </div>
         </div>
       </div>

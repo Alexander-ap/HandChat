@@ -43,7 +43,7 @@ app.use(
   "*",
   cors({
     origin: "*",
-    allowHeaders: ["Content-Type", "Authorization", "x-client-info", "apikey", "X-Requested-With"],
+    allowHeaders: ["Content-Type", "Authorization", "x-user-jwt", "x-client-info", "apikey", "X-Requested-With"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     exposeHeaders: ["Content-Length", "X-Request-Id"],
     maxAge: 86400,
@@ -55,7 +55,7 @@ app.use(
 app.options('*', (c) => {
   c.header('Access-Control-Allow-Origin', '*');
   c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-client-info, apikey, X-Requested-With');
+  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user-jwt, x-client-info, apikey, X-Requested-With');
   c.header('Access-Control-Max-Age', '86400');
   return c.text('', 204);
 });
@@ -77,16 +77,18 @@ const safeKv = {
       await kv.set(key, value);
       return true;
     } catch (error) {
-      console.warn(`[KV] set 失败 (key=${key}):`, (error as any).message);
-      return false;
+      const message = `[KV] set 失败 (key=${key}): ${(error as any).message}`;
+      console.error(message);
+      throw new Error(`${message}。请检查 Supabase KV 表 kv_store_eb001b4e 是否已创建，且 Edge Function 已配置 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY。`);
     }
   },
   async get(key: string): Promise<any> {
     try {
       return await kv.get(key);
     } catch (error) {
-      console.warn(`[KV] get 失败 (key=${key}):`, (error as any).message);
-      return null;
+      const message = `[KV] get 失败 (key=${key}): ${(error as any).message}`;
+      console.error(message);
+      throw new Error(`${message}。请检查 Supabase KV 表 kv_store_eb001b4e 与数据库连接配置。`);
     }
   },
   async del(key: string): Promise<boolean> {
@@ -94,16 +96,18 @@ const safeKv = {
       await kv.del(key);
       return true;
     } catch (error) {
-      console.warn(`[KV] del 失败 (key=${key}):`, (error as any).message);
-      return false;
+      const message = `[KV] del 失败 (key=${key}): ${(error as any).message}`;
+      console.error(message);
+      throw new Error(`${message}。请检查 Supabase KV 表 kv_store_eb001b4e 与数据库连接配置。`);
     }
   },
   async getByPrefix(prefix: string): Promise<any[]> {
     try {
       return await kv.getByPrefix(prefix);
     } catch (error) {
-      console.warn(`[KV] getByPrefix 失败 (prefix=${prefix}):`, (error as any).message);
-      return [];
+      const message = `[KV] getByPrefix 失败 (prefix=${prefix}): ${(error as any).message}`;
+      console.error(message);
+      throw new Error(`${message}。请检查 Supabase KV 表 kv_store_eb001b4e 与数据库连接配置。`);
     }
   },
 };
@@ -118,16 +122,32 @@ const getSupabase = () => {
   return createClient(supabaseUrl, supabaseKey);
 };
 
+const getSupabaseAuthClient = () => {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  return createClient(supabaseUrl, supabaseKey);
+};
+
+const getBearerToken = (headerValue?: string | null) => {
+  if (!headerValue) return "";
+  const [scheme, token] = headerValue.split(" ");
+  if (scheme?.toLowerCase() !== "bearer") return "";
+  return token?.trim() || "";
+};
+
 /**
  * 从请求头中提取并验证用户身份
  * @param c - Hono 上下文对象
  * @returns 验证通过的用户对象，失败则返回 null
  */
 const authenticateUser = async (c: any) => {
-  const accessToken = c.req.header('Authorization')?.split(' ')[1];
+  const accessToken =
+    c.req.header('x-user-jwt') ||
+    getBearerToken(c.req.header('Authorization')) ||
+    getBearerToken(c.req.header('authorization'));
   if (!accessToken) return null;
   
-  const supabase = getSupabase();
+  const supabase = getSupabaseAuthClient();
   const { data: { user }, error } = await supabase.auth.getUser(accessToken);
   if (error || !user) return null;
   return user;
@@ -150,6 +170,69 @@ const formatTimeAgo = (timestamp: number): string => {
   if (hours < 24) return `${hours}小时前`;
   if (days < 30) return `${days}天前`;
   return `${Math.floor(days / 30)}个月前`;
+};
+
+const DEFAULT_USER_SETTINGS = {
+  notification: true,
+  vibration: true,
+  language: "zh-CN",
+};
+
+const parseStoredValue = (value: any) => {
+  if (!value) return null;
+  return typeof value === "string" ? JSON.parse(value) : value;
+};
+
+const buildUserProfilePayload = (user: any, cachedProfile?: any) => ({
+  nickname: cachedProfile?.nickname ?? user?.user_metadata?.name ?? null,
+  avatar: cachedProfile?.avatar ?? user?.user_metadata?.avatar_url ?? null,
+  bio: cachedProfile?.bio ?? user?.user_metadata?.bio ?? null,
+});
+
+const getStoredUserSettings = async (userId: string) => {
+  const settings = parseStoredValue(await safeKv.get(`user_settings_${userId}`));
+  return {
+    ...DEFAULT_USER_SETTINGS,
+    ...(settings || {}),
+  };
+};
+
+const getUserBasicProfile = async (userId: string) => {
+  const cachedProfile = parseStoredValue(await safeKv.get(`user_profile_${userId}`));
+  if (cachedProfile) {
+    return {
+      userId,
+      nickname: cachedProfile.nickname ?? null,
+      avatar: cachedProfile.avatar ?? null,
+      bio: cachedProfile.bio ?? null,
+    };
+  }
+
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase.auth.admin.getUserById(userId);
+    if (error || !data?.user) {
+      return { userId, nickname: null, avatar: null, bio: null };
+    }
+
+    const profile = buildUserProfilePayload(data.user);
+    await safeKv.set(`user_profile_${userId}`, JSON.stringify({
+      userId,
+      ...profile,
+      updatedAt: Date.now(),
+    }));
+
+    return { userId, ...profile };
+  } catch (_error) {
+    return { userId, nickname: null, avatar: null, bio: null };
+  }
+};
+
+const getFollowEntries = async () => {
+  const values = await safeKv.getByPrefix("follow_");
+  return values
+    .map(parseStoredValue)
+    .filter((item: any) => item?.followerId && item?.followingId);
 };
 
 // ============================================================
@@ -246,6 +329,14 @@ app.post("/make-server-481f4acb/signup", async (c) => {
         createdAt: Date.now()
       };
       await safeKv.set(`user_stats_${data.user.id}`, JSON.stringify(initialStats));
+      await safeKv.set(`user_profile_${data.user.id}`, JSON.stringify({
+        userId: data.user.id,
+        nickname: name || "新用户",
+        avatar: null,
+        bio: null,
+        updatedAt: Date.now(),
+      }));
+      await safeKv.set(`user_settings_${data.user.id}`, JSON.stringify(DEFAULT_USER_SETTINGS));
       
       // 记录积分历史
       const pointRecord = {
@@ -338,6 +429,23 @@ app.post("/make-server-481f4acb/upload", async (c) => {
 // ============================================================
 
 /**
+ * 获取用户资料
+ * GET /user/profile
+ */
+app.get("/make-server-481f4acb/user/profile", async (c) => {
+  try {
+    const user = await authenticateUser(c);
+    if (!user) return c.json({ error: "请先登录" }, 401);
+
+    const cachedProfile = parseStoredValue(await safeKv.get(`user_profile_${user.id}`));
+    return c.json(buildUserProfilePayload(user, cachedProfile));
+  } catch (error: any) {
+    console.error("[资料获取] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
  * 更新用户资料
  * PUT /user/profile
  * 
@@ -354,15 +462,17 @@ app.put("/make-server-481f4acb/user/profile", async (c) => {
     
     const supabase = getSupabase();
     const body = await c.req.json();
-    const { name, bio, phone, location, avatar_url } = body;
+    const { name, nickname, bio, phone, location, avatar_url, avatar } = body;
+    const effectiveName = nickname ?? name;
+    const effectiveAvatar = avatar ?? avatar_url;
     
     // 构建更新数据，只更新有值的字段
     const updateData: Record<string, any> = {};
-    if (name !== undefined) updateData.name = name;
+    if (effectiveName !== undefined) updateData.name = effectiveName;
     if (bio !== undefined) updateData.bio = bio;
     if (phone !== undefined) updateData.phone = phone;
     if (location !== undefined) updateData.location = location;
-    if (avatar_url !== undefined) updateData.avatar_url = avatar_url;
+    if (effectiveAvatar !== undefined) updateData.avatar_url = effectiveAvatar;
     
     const { data, error } = await supabase.auth.admin.updateUserById(
       user.id,
@@ -373,8 +483,20 @@ app.put("/make-server-481f4acb/user/profile", async (c) => {
       console.error("[资料更新] 错误:", error);
       return c.json({ error: error.message }, 500);
     }
+
+    await safeKv.set(`user_profile_${user.id}`, JSON.stringify({
+      userId: user.id,
+      nickname: effectiveName ?? user.user_metadata?.name ?? null,
+      avatar: effectiveAvatar ?? user.user_metadata?.avatar_url ?? null,
+      bio: bio ?? user.user_metadata?.bio ?? null,
+      updatedAt: Date.now(),
+    }));
     
-    return c.json({ success: true, user: data.user });
+    return c.json({
+      nickname: effectiveName ?? data.user?.user_metadata?.name ?? null,
+      avatar: effectiveAvatar ?? data.user?.user_metadata?.avatar_url ?? null,
+      bio: bio ?? data.user?.user_metadata?.bio ?? null,
+    });
   } catch (error: any) {
     console.error("[资料更新] 异常:", error);
     return c.json({ error: error.message }, 500);
@@ -446,6 +568,241 @@ app.get("/make-server-481f4acb/user/stats", async (c) => {
     return c.json({ stats });
   } catch (error: any) {
     console.error("[用户统计] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 获取用户设置
+ * GET /user/settings
+ */
+app.get("/make-server-481f4acb/user/settings", async (c) => {
+  try {
+    const user = await authenticateUser(c);
+    if (!user) return c.json({ error: "请先登录" }, 401);
+
+    return c.json(await getStoredUserSettings(user.id));
+  } catch (error: any) {
+    console.error("[用户设置] 获取异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 更新用户设置
+ * PUT /user/settings
+ */
+app.put("/make-server-481f4acb/user/settings", async (c) => {
+  try {
+    const user = await authenticateUser(c);
+    if (!user) return c.json({ error: "请先登录" }, 401);
+
+    const body = await c.req.json();
+    const current = await getStoredUserSettings(user.id);
+    const nextSettings = {
+      ...current,
+      ...(body.notification !== undefined ? { notification: Boolean(body.notification) } : {}),
+      ...(body.vibration !== undefined ? { vibration: Boolean(body.vibration) } : {}),
+      ...(body.language !== undefined ? { language: String(body.language) } : {}),
+    };
+
+    await safeKv.set(`user_settings_${user.id}`, JSON.stringify(nextSettings));
+    return c.json(nextSettings);
+  } catch (error: any) {
+    console.error("[用户设置] 更新异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 获取每日统计
+ * GET /user/stats/daily?days=7
+ */
+app.get("/make-server-481f4acb/user/stats/daily", async (c) => {
+  try {
+    const user = await authenticateUser(c);
+    if (!user) return c.json({ error: "请先登录" }, 401);
+
+    const days = Math.min(Math.max(Number(c.req.query("days")) || 7, 1), 30);
+    const [signRecords, ocrRecords, soundRecords, posts] = await Promise.all([
+      safeKv.getByPrefix("sign_"),
+      safeKv.getByPrefix("ocr_"),
+      safeKv.getByPrefix("sound_"),
+      safeKv.getByPrefix("post_"),
+    ]);
+
+    const counters: Record<string, number> = {};
+    const collect = (values: any[], predicate: (item: any) => boolean) => {
+      values
+        .map(parseStoredValue)
+        .filter((item: any) => item?.createdAt && predicate(item))
+        .forEach((item: any) => {
+          const date = new Date(item.createdAt).toISOString().slice(0, 10);
+          counters[date] = (counters[date] || 0) + 1;
+        });
+    };
+
+    collect(signRecords, (item) => item.userId === user.id);
+    collect(ocrRecords, (item) => item.userId === user.id);
+    collect(soundRecords, (item) => item.userId === user.id);
+    collect(posts, (item) => item.userId === user.id);
+
+    const result = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+      result.push({
+        date,
+        count: counters[date] || 0,
+      });
+    }
+
+    return c.json(result);
+  } catch (error: any) {
+    console.error("[每日统计] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 获取用户基础信息
+ * GET /user/:id/basic
+ */
+app.get("/make-server-481f4acb/user/:id/basic", async (c) => {
+  try {
+    const userId = c.req.param("id");
+    return c.json(await getUserBasicProfile(userId));
+  } catch (error: any) {
+    console.error("[用户基础信息] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 获取粉丝数
+ * GET /user/:id/followers/count
+ */
+app.get("/make-server-481f4acb/user/:id/followers/count", async (c) => {
+  try {
+    const userId = c.req.param("id");
+    const follows = await getFollowEntries();
+    return c.json({ count: follows.filter((item: any) => item.followingId === userId).length });
+  } catch (error: any) {
+    console.error("[粉丝数] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 获取关注数
+ * GET /user/:id/following/count
+ */
+app.get("/make-server-481f4acb/user/:id/following/count", async (c) => {
+  try {
+    const userId = c.req.param("id");
+    const follows = await getFollowEntries();
+    return c.json({ count: follows.filter((item: any) => item.followerId === userId).length });
+  } catch (error: any) {
+    console.error("[关注数] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 获取粉丝列表
+ * GET /user/:id/followers
+ */
+app.get("/make-server-481f4acb/user/:id/followers", async (c) => {
+  try {
+    const userId = c.req.param("id");
+    const follows = await getFollowEntries();
+    return c.json({
+      users: follows
+        .filter((item: any) => item.followingId === userId)
+        .map((item: any) => ({ userId: item.followerId })),
+    });
+  } catch (error: any) {
+    console.error("[粉丝列表] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 获取关注列表
+ * GET /user/:id/following
+ */
+app.get("/make-server-481f4acb/user/:id/following", async (c) => {
+  try {
+    const userId = c.req.param("id");
+    const follows = await getFollowEntries();
+    return c.json({
+      users: follows
+        .filter((item: any) => item.followerId === userId)
+        .map((item: any) => ({ userId: item.followingId })),
+    });
+  } catch (error: any) {
+    console.error("[关注列表] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 关注状态
+ * GET /user/:id/is-following
+ */
+app.get("/make-server-481f4acb/user/:id/is-following", async (c) => {
+  try {
+    const user = await authenticateUser(c);
+    if (!user) return c.json({ following: false });
+
+    const targetUserId = c.req.param("id");
+    const exists = await safeKv.get(`follow_${user.id}_${targetUserId}`);
+    return c.json({ following: Boolean(exists) });
+  } catch (error: any) {
+    console.error("[关注状态] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 关注用户
+ * POST /user/:id/follow
+ */
+app.post("/make-server-481f4acb/user/:id/follow", async (c) => {
+  try {
+    const user = await authenticateUser(c);
+    if (!user) return c.json({ error: "请先登录" }, 401);
+
+    const targetUserId = c.req.param("id");
+    if (targetUserId === user.id) {
+      return c.json({ error: "不能关注自己" }, 400);
+    }
+
+    await safeKv.set(`follow_${user.id}_${targetUserId}`, JSON.stringify({
+      followerId: user.id,
+      followingId: targetUserId,
+      createdAt: Date.now(),
+    }));
+    return c.json({ success: true, following: true });
+  } catch (error: any) {
+    console.error("[关注] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/**
+ * 取消关注
+ * DELETE /user/:id/follow
+ */
+app.delete("/make-server-481f4acb/user/:id/follow", async (c) => {
+  try {
+    const user = await authenticateUser(c);
+    if (!user) return c.json({ error: "请先登录" }, 401);
+
+    const targetUserId = c.req.param("id");
+    await safeKv.del(`follow_${user.id}_${targetUserId}`);
+    return c.json({ success: true, following: false });
+  } catch (error: any) {
+    console.error("[取消关注] 异常:", error);
     return c.json({ error: error.message }, 500);
   }
 });
@@ -677,10 +1034,9 @@ app.post("/make-server-481f4acb/sound/recognize", async (c) => {
       return c.json({ error: "请提供音频数据" }, 400);
     }
     
-    // 读取科大讯飞 API 配置 (带Fallback截图中提供的凭证)
-    const appId = Deno.env.get('XFYUN_APP_ID') || '969a2405';
-    const apiKey = Deno.env.get('XFYUN_API_KEY') || 'b8e9f087080b10411dd6d40038ddf1c9';
-    const apiSecret = Deno.env.get('XFYUN_API_SECRET') || 'Y2QyZjI4NGMyMTU1ZDE3NWYzMTA4OWJm';
+    const appId = Deno.env.get('XFYUN_APP_ID') || '';
+    const apiKey = Deno.env.get('XFYUN_API_KEY') || '';
+    const apiSecret = Deno.env.get('XFYUN_API_SECRET') || '';
     
     // 如果未配置API密钥，使用本地智能分析模拟
     if (!appId || !apiKey || !apiSecret) {
@@ -919,16 +1275,17 @@ app.get("/make-server-481f4acb/sound/history", async (c) => {
 app.post("/make-server-481f4acb/posts", async (c) => {
   try {
     const user = await authenticateUser(c);
+    if (!user) return c.json({ error: "请先登录" }, 401);
     const body = await c.req.json();
     const postId = Date.now().toString();
     
     const post = {
       id: postId,
-      userId: user?.id || 'anonymous',
+      userId: user.id,
       author: {
-        name: body.author || user?.user_metadata?.name || '匿名用户',
-        avatar: body.avatar || user?.user_metadata?.avatar_url || '',
-        verified: !!user
+        name: body.author || user.user_metadata?.name || '匿名用户',
+        avatar: body.avatar || user.user_metadata?.avatar_url || '',
+        verified: true
       },
       content: body.content || '',
       images: body.images || [],
@@ -957,25 +1314,74 @@ app.post("/make-server-481f4acb/posts", async (c) => {
  */
 app.get("/make-server-481f4acb/posts", async (c) => {
   try {
+    const user = await authenticateUser(c);
+    const feed = c.req.query("feed");
     const keys = await safeKv.getByPrefix("post_");
-    const posts = keys
-      .map((val: any) => {
-        const post = typeof val === 'string' ? JSON.parse(val) : val;
-        // 更新相对时间
+    let posts = keys
+      .map(parseStoredValue)
+      .filter(Boolean)
+      .map((post: any) => {
         if (post.createdAt) {
           post.timeAgo = formatTimeAgo(post.createdAt);
         }
-        // 确保 author 是对象格式
         if (typeof post.author === 'string') {
           post.author = { name: post.author, avatar: post.avatar || '', verified: false };
         }
         return post;
-      })
-      .sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+      });
+
+    if (feed === "following") {
+      if (!user) return c.json({ error: "请先登录" }, 401);
+
+      const follows = await getFollowEntries();
+      const followingIds = new Set(
+        follows
+          .filter((item: any) => item.followerId === user.id)
+          .map((item: any) => item.followingId)
+      );
+      posts = posts.filter((post: any) => followingIds.has(post.userId));
+    }
+
+    posts = posts.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    if (user) {
+      posts = await Promise.all(posts.map(async (post: any) => ({
+        ...post,
+        isBookmarked: Boolean(await safeKv.get(`bookmark_${user.id}_${post.id}`)),
+      })));
+    }
     
     return c.json({ posts });
   } catch (error: any) {
     console.error("[获取帖子] 异常:", error);
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+/** 获取单条帖子详情 */
+app.get("/make-server-481f4acb/posts/:id", async (c) => {
+  try {
+    const user = await authenticateUser(c);
+    const postId = c.req.param("id");
+    const stored = parseStoredValue(await safeKv.get(`post_${postId}`));
+
+    if (!stored) {
+      return c.json({ error: "帖子不存在" }, 404);
+    }
+
+    if (stored.createdAt) {
+      stored.timeAgo = formatTimeAgo(stored.createdAt);
+    }
+    if (typeof stored.author === "string") {
+      stored.author = { name: stored.author, avatar: stored.avatar || "", verified: false };
+    }
+    if (user) {
+      stored.isBookmarked = Boolean(await safeKv.get(`bookmark_${user.id}_${postId}`));
+    }
+
+    return c.json(stored);
+  } catch (error: any) {
+    console.error("[帖子详情] 异常:", error);
     return c.json({ error: error.message }, 500);
   }
 });

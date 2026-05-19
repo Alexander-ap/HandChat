@@ -12,6 +12,25 @@ export interface PageStateContext {
   setPageState: (key: string, state: any) => void;
 }
 
+//#region debug-point follow-auth-after-login
+const __ENABLE_DEBUG_REPORT__ = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEBUG_TELEMETRY === "true";
+const __DBG_URL__ = "http://127.0.0.1:3939/log";
+async function __dbgReport__(payload: Record<string, any>) {
+  if (!__ENABLE_DEBUG_REPORT__) return;
+  try {
+    await fetch(__DBG_URL__, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "follow-auth-after-login",
+        src: "frontend",
+        ...payload,
+      }),
+    });
+  } catch (_) {}
+}
+//#endregion debug-point follow-auth-after-login
+
 /** 主页面路径集合 - 这些是底部导航栏对应的页面 */
 const MAIN_PAGES = new Set(["/", "/sign-language", "/sound", "/community", "/profile"]);
 
@@ -68,19 +87,57 @@ function RootContent() {
   useEffect(() => {
     let mounted = true;
 
+    const bootstrapSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+
+        syncAuthToken(session?.access_token || null);
+        setIsLoggedIn(Boolean(session));
+        setAuthChecked(true);
+        //#region debug-point follow-auth-after-login
+        void __dbgReport__({
+          evt: "auth.bootstrapSession",
+          hasSession: Boolean(session),
+          userId: session?.user?.id ?? null,
+          expiresAt: session?.expires_at ?? null,
+        });
+        //#endregion debug-point follow-auth-after-login
+      } catch (error) {
+        if (!mounted) return;
+        syncAuthToken(null);
+        setIsLoggedIn(false);
+        setAuthChecked(true);
+        //#region debug-point follow-auth-after-login
+        void __dbgReport__({
+          evt: "auth.bootstrapSession.error",
+          message: (error as any)?.message ?? String(error),
+        });
+        //#endregion debug-point follow-auth-after-login
+      }
+    };
+
+    void bootstrapSession();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
       
       // 同步 token 到 api
       syncAuthToken(session?.access_token || null);
+      //#region debug-point follow-auth-after-login
+      void __dbgReport__({
+        evt: "auth.onAuthStateChange",
+        event,
+        hasSession: Boolean(session),
+        userId: session?.user?.id ?? null,
+        expiresAt: session?.expires_at ?? null,
+      });
+      //#endregion debug-point follow-auth-after-login
 
       if (event === 'INITIAL_SESSION') {
         // 初始会话事件：立即确定登录状态
         setIsLoggedIn(!!session);
         setAuthChecked(true);
-        if (!session) {
-          navigate("/login", { replace: true });
-        }
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         // 登录成功或 token 刷新：更新为已登录状态
         setIsLoggedIn(true);
@@ -88,7 +145,9 @@ function RootContent() {
       } else if (event === 'SIGNED_OUT') {
         // 明确退出：跳转到登录页
         setIsLoggedIn(false);
-        navigate("/login", { replace: true });
+        if (location.pathname !== "/login") {
+          navigate("/login", { replace: true });
+        }
       }
     });
 
@@ -96,7 +155,7 @@ function RootContent() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   useEffect(() => {
     // 检查是否是首次访问

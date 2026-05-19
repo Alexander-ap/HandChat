@@ -19,16 +19,36 @@ export async function createPost(input: CreatePostInput) {
   return post
 }
 
+const postListInclude = {
+  _count: { select: { comments: true } },
+  comments: {
+    orderBy: { createdAt: 'asc' as const },
+    take: 3,
+    select: {
+      id: true,
+      content: true,
+      authorId: true,
+      createdAt: true,
+    },
+  },
+}
+
 export async function listPosts(limit = 20, offset = 0) {
   return prisma.post.findMany({
     orderBy: { createdAt: 'desc' },
     take: limit,
     skip: offset,
+    include: postListInclude,
+  })
+}
+
+export async function getPostById(postId: string) {
+  return prisma.post.findUnique({
+    where: { id: postId },
     include: {
-      _count: { select: { comments: true } },
+      ...postListInclude,
       comments: {
         orderBy: { createdAt: 'asc' },
-        take: 3,
         select: {
           id: true,
           content: true,
@@ -40,6 +60,19 @@ export async function listPosts(limit = 20, offset = 0) {
   })
 }
 
+export async function updatePost(postId: string, userId: string, data: { title: string; content: string }) {
+  const result = await prisma.post.updateMany({
+    where: { id: postId, authorId: userId },
+    data: {
+      title: data.title,
+      content: data.content,
+    },
+  })
+  if (result.count === 0) return null
+  logger.info('Post updated', { postId, userId })
+  return getPostById(postId)
+}
+
 export async function deletePost(postId: string, userId: string) {
   const result = await prisma.post.deleteMany({
     where: { id: postId, authorId: userId },
@@ -49,15 +82,53 @@ export async function deletePost(postId: string, userId: string) {
   return { id: postId }
 }
 
-export async function likePost(postId: string) {
-  const post = await prisma.post.update({
+export async function toggleLike(postId: string, userId: string) {
+  const post = await prisma.post.findUnique({
     where: { id: postId },
-    data: { likes: { increment: 1 } },
+    select: { id: true, likes: true },
   })
-  return post
+  if (!post) return null
+
+  const existing = await prisma.like.findUnique({
+    where: { userId_postId: { userId, postId } },
+  })
+
+  if (existing) {
+    const [, updated] = await prisma.$transaction([
+      prisma.like.delete({
+        where: { userId_postId: { userId, postId } },
+      }),
+      prisma.post.update({
+        where: { id: postId },
+        data: { likes: { decrement: 1 } },
+        select: { likes: true },
+      }),
+    ])
+    logger.info('Like removed', { userId, postId })
+    return { liked: false, likes: Math.max(0, updated.likes) }
+  }
+
+  const [, updated] = await prisma.$transaction([
+    prisma.like.create({
+      data: { userId, postId },
+    }),
+    prisma.post.update({
+      where: { id: postId },
+      data: { likes: { increment: 1 } },
+      select: { likes: true },
+    }),
+  ])
+  logger.info('Like added', { userId, postId })
+  return { liked: true, likes: updated.likes }
 }
 
 export async function addComment(postId: string, authorId: string, content: string) {
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { id: true },
+  })
+  if (!post) return null
+
   const comment = await prisma.comment.create({
     data: { postId, authorId, content },
   })
@@ -87,19 +158,7 @@ export async function listFollowingPosts(userId: string, limit = 20, offset = 0)
     orderBy: { createdAt: 'desc' },
     take: limit,
     skip: offset,
-    include: {
-      _count: { select: { comments: true } },
-      comments: {
-        orderBy: { createdAt: 'asc' },
-        take: 3,
-        select: {
-          id: true,
-          content: true,
-          authorId: true,
-          createdAt: true,
-        },
-      },
-    },
+    include: postListInclude,
   })
 }
 
@@ -146,4 +205,46 @@ export async function isBookmarked(userId: string, postId: string) {
     where: { userId_postId: { userId, postId } },
   })
   return bookmark !== null
+}
+
+export async function listBookmarkedPosts(userId: string, limit = 20, offset = 0) {
+  const bookmarks = await prisma.bookmark.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    skip: offset,
+    include: {
+      post: {
+        include: postListInclude,
+      },
+    },
+  })
+
+  return bookmarks
+    .map((item) => item.post)
+    .filter(Boolean)
+}
+
+export async function getLikedPostIds(userId: string, postIds: string[]) {
+  if (postIds.length === 0) return new Set<string>()
+  const likes = await prisma.like.findMany({
+    where: {
+      userId,
+      postId: { in: postIds },
+    },
+    select: { postId: true },
+  })
+  return new Set(likes.map((item) => item.postId))
+}
+
+export async function getBookmarkedPostIds(userId: string, postIds: string[]) {
+  if (postIds.length === 0) return new Set<string>()
+  const bookmarks = await prisma.bookmark.findMany({
+    where: {
+      userId,
+      postId: { in: postIds },
+    },
+    select: { postId: true },
+  })
+  return new Set(bookmarks.map((item) => item.postId))
 }

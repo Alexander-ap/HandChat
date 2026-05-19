@@ -6,6 +6,8 @@ import {
   getFollowingCount,
   getFollowerCount,
   isFollowing,
+  getFollowingList,
+  getFollowerList,
 } from '../services/followService'
 
 const router = Router()
@@ -56,8 +58,15 @@ router.delete('/:id/follow', authMiddleware, async (req, res, next) => {
 router.get('/:id/followers', async (req, res, next) => {
   try {
     const id = String(req.params.id)
-    const count = await getFollowerCount(id)
-    res.json({ count })
+    const limit = Math.min(Number(req.query.limit) || 50, 100)
+    const offset = Math.max(Number(req.query.offset) || 0, 0)
+    const users = await getFollowerList(id, limit, offset)
+    res.json({
+      users: users.map((item) => ({
+        userId: item.followerId,
+        createdAt: item.createdAt.toISOString(),
+      })),
+    })
   } catch (err) {
     next(err)
   }
@@ -66,8 +75,15 @@ router.get('/:id/followers', async (req, res, next) => {
 router.get('/:id/following', async (req, res, next) => {
   try {
     const id = String(req.params.id)
-    const count = await getFollowingCount(id)
-    res.json({ count })
+    const limit = Math.min(Number(req.query.limit) || 50, 100)
+    const offset = Math.max(Number(req.query.offset) || 0, 0)
+    const users = await getFollowingList(id, limit, offset)
+    res.json({
+      users: users.map((item) => ({
+        userId: item.followingId,
+        createdAt: item.createdAt.toISOString(),
+      })),
+    })
   } catch (err) {
     next(err)
   }

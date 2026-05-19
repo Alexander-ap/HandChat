@@ -1,5 +1,6 @@
 import { prisma } from '../db'
 import { logger } from '../logger'
+import { listBookmarkedPosts } from './postService'
 
 export interface UserStats {
   postCount: number
@@ -102,7 +103,7 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     pointsResult,
     achievementCount,
     totalTranslations,
-    sessionCount,
+    sessions,
   ] = await Promise.all([
     prisma.post.count({ where: { authorId: userId } }),
     prisma.follow.count({ where: { followerId: userId } }),
@@ -115,10 +116,15 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     prisma.translation.count({
       where: { session: { userId } },
     }),
-    prisma.session.count({
+    prisma.session.findMany({
       where: { userId },
+      select: { startedAt: true },
     }),
   ])
+
+  const activeDays = new Set(
+    sessions.map((item) => item.startedAt.toISOString().slice(0, 10))
+  ).size
 
   return {
     postCount,
@@ -126,7 +132,7 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     followerCount,
     points: pointsResult._sum.amount || 0,
     achievementCount,
-    days: sessionCount,
+    days: activeDays,
     loginStreak: 1,
     totalTranslations,
     totalOcr: 0,
@@ -177,4 +183,10 @@ export async function getUserBasic(userId: string) {
     nickname: profile.nickname,
     avatar: profile.avatar,
   }
+}
+
+export async function getUserBookmarks(userId: string, limit = 20, offset = 0) {
+  const posts = await listBookmarkedPosts(userId, limit, offset)
+  logger.info('User bookmarks fetched', { userId, count: posts.length })
+  return posts
 }

@@ -25,7 +25,7 @@ export default function SignLanguageSessionDetailPage() {
   const [searchParams] = useSearchParams();
   const initialMode = useMemo<HandChatHistoryMode>(() => {
     const queryMode = searchParams.get("mode");
-    if (queryMode === "browser" || queryMode === "mock" || queryMode === "server") {
+    if (queryMode === "browser" || queryMode === "server") {
       return queryMode;
     }
     return getStoredHandChatHistoryMode();

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Database, RefreshCw, Server, Smartphone } from "lucide-react";
+import { ArrowLeft, RefreshCw, Server, Smartphone } from "lucide-react";
 import { Button } from "../components/ui/button";
 import {
   createSessionDataSource,
@@ -17,7 +17,6 @@ const MODE_OPTIONS: Array<{
   icon: typeof Smartphone;
 }> = [
   { mode: "browser", label: "本地会话", icon: Smartphone },
-  { mode: "mock", label: "Mock 数据", icon: Database },
   { mode: "server", label: "真实服务", icon: Server },
 ];
 
@@ -84,14 +83,14 @@ export default function SignLanguageHistoryPage() {
           <div className="flex items-center justify-between gap-3 mb-3">
             <div>
               <p className="text-[14px] font-semibold text-gray-900">数据源切换</p>
-              <p className="text-[12px] text-gray-500 mt-1">用于 P2 开发调试，可在本地/Mock/真实服务间切换。</p>
+              <p className="text-[12px] text-gray-500 mt-1">支持在本地历史与真实服务间切换，旧版 Mock 模式会自动回退到本地历史。</p>
             </div>
             <Button variant="outline" className="h-9 rounded-[10px]" onClick={() => void loadSessions()}>
               <RefreshCw className="w-4 h-4 mr-1.5" />
               刷新
             </Button>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {MODE_OPTIONS.map((option) => {
               const Icon = option.icon;
               const active = option.mode === mode;

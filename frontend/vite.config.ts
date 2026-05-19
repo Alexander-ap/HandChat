@@ -19,4 +19,18 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  server: {
+    host: true,
+    strictPort: false,
+    allowedHosts: ["localhost", "127.0.0.1", "10.0.2.2", ".ngrok-free.app", ".loca.lt"],
+    proxy: {
+      "/edge": {
+        target: "https://jgverskznikedselvshj.supabase.co",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/edge/, "/functions/v1/make-server-481f4acb"),
+      },
+    },
+  },
 })

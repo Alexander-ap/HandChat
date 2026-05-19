@@ -10,11 +10,12 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
+    "db:ensure-community": "node scripts/ensure-community-schema.mjs",
     "selfcheck": "node scripts/selfcheck.mjs",
-    "test:integration": "node scripts/integration-test.mjs"
+    "test:integration": "node scripts/integration-test.mjs",
+    "test:stress": "node scripts/stress-test.mjs"
   },
   "dependencies": {
-    "@prisma/client": "^6.0.0",
     "@supabase/supabase-js": "^2.99.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
@@ -23,11 +24,12 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
+    "@prisma/client": "6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.19.19",
     "@types/ws": "^8.18.1",
-    "prisma": "^6.0.0",
+    "prisma": "6.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

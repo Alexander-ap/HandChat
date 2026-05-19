@@ -5,7 +5,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
-import { authApi } from "../lib/api";
+import { authApi, syncAuthToken } from "../lib/api";
 import { useLanguage } from "../contexts/LanguageContext";
 
 // 页面模式：登录 / 注册 / 找回密码
@@ -59,6 +59,7 @@ export default function LoginPage() {
         });
         if (error) throw error;
         if (!data.session) throw new Error("登录失败，未获取到会话");
+        syncAuthToken(data.session.access_token);
         toast.success(text("登录成功", "Signed in successfully"));
         navigate("/", { replace: true });
       } else {
@@ -109,6 +110,7 @@ export default function LoginPage() {
         });
         if (signInError) throw signInError;
         if (!signInData.session) throw new Error(text("注册后登录失败", "Failed to sign in after registration"));
+        syncAuthToken(signInData.session.access_token);
 
         toast.success(text("注册成功，欢迎加入！", "Registration successful. Welcome!"));
         navigate("/", { replace: true });

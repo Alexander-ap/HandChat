@@ -1,7 +1,7 @@
 import { projectId } from "/utils/supabase/info";
 
 export type HandChatLiveMode = "browser" | "server";
-export type HandChatHistoryMode = "browser" | "mock" | "server";
+export type HandChatHistoryMode = "browser" | "server";
 
 const LIVE_MODE_KEY = "handchat.live-mode.v1";
 const HISTORY_MODE_KEY = "handchat.history-mode.v1";
@@ -38,7 +38,8 @@ export function setStoredHandChatLiveMode(mode: HandChatLiveMode) {
 }
 
 export function getStoredHandChatHistoryMode(): HandChatHistoryMode {
-  return readStorageValue<HandChatHistoryMode>(HISTORY_MODE_KEY, "browser");
+  const mode = readStorageValue<string>(HISTORY_MODE_KEY, "browser");
+  return mode === "server" ? "server" : "browser";
 }
 
 export function setStoredHandChatHistoryMode(mode: HandChatHistoryMode) {

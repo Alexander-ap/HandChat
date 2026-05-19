@@ -9,6 +9,7 @@ import { ArrowLeft, Star, Gift, ShoppingBag, Crown } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { userApi } from "../lib/api";
 import { useLanguage } from "../contexts/LanguageContext";
+import { toast } from "sonner";
 
 interface PointRecord {
   id: string;
@@ -35,28 +36,18 @@ export default function PointsPage() {
         if (statsData.status === 'fulfilled' && statsData.value.stats) {
           setTotalPoints(statsData.value.stats.points || 0);
         } else {
-          setTotalPoints(100);
+          setTotalPoints(0);
         }
         
         if (pointsData.status === 'fulfilled' && pointsData.value.records) {
           setHistory(pointsData.value.records);
         } else {
-          // 使用默认数据
-          setHistory([
-            { id: "1", title: "每日登录", points: 10, date: "今天 08:30", type: "earn" },
-            { id: "2", title: "发布社区帖子", points: 20, date: "昨天 14:15", type: "earn" },
-            { id: "3", title: "完成学习打卡", points: 30, date: "3月14日", type: "earn" },
-          ]);
-          setTotalPoints(100);
+          setHistory([]);
         }
       } catch (e) {
         console.error("[积分页面] 获取数据失败:", e);
-        setHistory([
-          { id: "1", title: "每日登录", points: 10, date: "今天 08:30", type: "earn" },
-          { id: "2", title: "发布社区帖子", points: 20, date: "昨天 14:15", type: "earn" },
-          { id: "3", title: "完成学习打卡", points: 30, date: "3月14日", type: "earn" },
-        ]);
-        setTotalPoints(100);
+        setHistory([]);
+        setTotalPoints(0);
       }
     };
     fetchData();
@@ -107,16 +98,21 @@ export default function PointsPage() {
       <div className="w-full max-w-2xl mx-auto space-y-4 px-4 pt-3">
         <div className="app-panel rounded-[24px] p-4 flex justify-around">
           {[
-            { icon: Gift, label: "积分抽奖", color: "text-orange-500", bg: "bg-orange-50" },
-            { icon: ShoppingBag, label: "积分商城", color: "text-blue-500", bg: "bg-blue-50" },
-            { icon: Crown, label: "会员特权", color: "text-purple-500", bg: "bg-purple-50" },
+            { icon: Gift, label: text("积分抽奖", "Lucky Draw"), color: "text-orange-500", bg: "bg-orange-50" },
+            { icon: ShoppingBag, label: text("积分商城", "Points Store"), color: "text-blue-500", bg: "bg-blue-50" },
+            { icon: Crown, label: text("会员特权", "Member Perks"), color: "text-purple-500", bg: "bg-purple-50" },
           ].map((item, i) => (
-              <div key={i} className="flex flex-col items-center gap-2">
+              <button
+                key={i}
+                type="button"
+                onClick={() => toast.info(text(`${item.label}即将上线`, `${item.label} is coming soon`))}
+                className="flex flex-col items-center gap-2 rounded-[18px] px-2 py-1.5 transition-colors hover:bg-white/50"
+              >
                 <div className={`flex h-11 w-11 items-center justify-center rounded-[16px] ${item.bg} ${item.color}`}>
-                <item.icon className="w-5 h-5" />
-              </div>
+                  <item.icon className="w-5 h-5" />
+                </div>
                 <span className="text-[12px] font-medium text-slate-600">{item.label}</span>
-            </div>
+              </button>
           ))}
         </div>
 
@@ -124,7 +120,7 @@ export default function PointsPage() {
           <h2 className="mb-2 px-1 text-[14px] font-bold text-slate-800">积分明细</h2>
           <div className="app-panel overflow-hidden rounded-[24px]">
             {history.length === 0 ? (
-              <div className="py-10 text-center text-[14px] text-slate-400">暂无积分记录</div>
+              <div className="py-10 text-center text-[14px] text-slate-400">{text("暂无积分记录", "No point records yet")}</div>
             ) : (
               history.map((item, idx) => (
                 <div 

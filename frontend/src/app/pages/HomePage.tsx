@@ -461,12 +461,16 @@ export default function HomePage() {
   return (
     <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
       {/* Header */}
-      <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-10 pb-4">
+      <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-11 pb-3">
         <div className="w-full max-w-2xl">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h1 className="text-[30px] font-bold text-slate-900 mb-1 tracking-[-0.03em]">{text("视觉辅助", "Vision Assistance")}</h1>
-              <p className="text-[13px] text-slate-500">{text("通过相机识别、提取与放大文字内容", "Recognize, extract, and enlarge text through the camera")}</p>
+              <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal text-[var(--md-sys-color-on-surface)]">
+                {text("视觉辅助", "Vision Assistance")}
+              </h1>
+              <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
+                {text("通过相机识别、提取与放大文字内容", "Recognize, extract, and enlarge text through the camera")}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <div className="hidden sm:flex rounded-2xl border border-white/70 bg-white/60 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
