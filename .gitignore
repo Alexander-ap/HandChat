@@ -41,3 +41,16 @@ backend/tests/register-form.png
 
 # Supabase local
 supabase/.temp/
+
+# Debug & smoke test artifacts
+.dbg/
+.npm-cache/
+
+# Test reports & probe outputs
+backend/integration-report.json
+backend/probe-latest.json
+backend/stress-report.json
+
+# Debug log dumps
+*.ndjson
+.claude
