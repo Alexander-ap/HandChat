@@ -6,11 +6,15 @@ export type HandChatHistoryMode = "browser" | "server";
 const LIVE_MODE_KEY = "handchat.live-mode.v1";
 const HISTORY_MODE_KEY = "handchat.history-mode.v1";
 
+const devHost = typeof window !== "undefined" ? window.location.hostname || "localhost" : "localhost";
+const devApiUrl = `http://${devHost}:3001/api`;
+const devWsUrl = `ws://${devHost}:3001`;
+
 export const HANDCHAT_DEFAULT_WS_URL =
-  import.meta.env.VITE_HANDCHAT_WS_URL || "ws://localhost:3001";
+  import.meta.env.VITE_HANDCHAT_WS_URL || (import.meta.env.DEV ? devWsUrl : "ws://localhost:3001");
 export const HANDCHAT_DEFAULT_API_URL =
   import.meta.env.VITE_HANDCHAT_API_URL ||
-  `https://${projectId}.supabase.co/functions/v1/api`;
+  (import.meta.env.DEV ? devApiUrl : `https://${projectId}.supabase.co/functions/v1/api`);
 
 function readStorageValue<T extends string>(key: string, fallback: T): T {
   if (typeof window === "undefined") {

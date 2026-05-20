@@ -115,6 +115,16 @@ export class HandChatWsClient {
             this.events.onSessionCreated?.(parsed.payload);
           }
 
+          if (parsed.type === "error" && this.pendingConnect) {
+            const error = new Error(parsed.payload.error) as Error & { code?: number };
+            error.code = parsed.payload.code;
+            this.pendingConnect.reject(error);
+            this.pendingConnect = null;
+            this.manualClose = true;
+            this.stopHeartbeat();
+            this.socket?.close();
+          }
+
           this.events.onMessage?.(parsed);
         } catch (error) {
           console.warn("[HandChatWsClient] 无法解析服务端消息", error);
@@ -144,7 +154,7 @@ export class HandChatWsClient {
   disconnect() {
     this.manualClose = true;
     this.stopHeartbeat();
-    this.socket?.close();
+    this.socket?.close(1000, "client_disconnect");
     this.socket = null;
     this.pendingConnect = null;
   }

@@ -25,9 +25,9 @@ app.use(cors({
       ? ['https://handchat.vercel.app']
       : config.corsOrigins;
     const requestOrigin = origin ?? '';
-    const isLocalDevOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?$/i.test(requestOrigin);
+    const isLocalDevOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(:\d+)?$/i.test(requestOrigin);
 
-    // Allow non-browser clients and same-machine local development hosts.
+    // Allow non-browser clients and local-network development hosts.
     if (!origin || allowedOrigins.includes(origin) || isLocalDevOrigin) {
       callback(null, true);
       return;

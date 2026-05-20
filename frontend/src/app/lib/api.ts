@@ -37,27 +37,38 @@ async function __dbgReport__(payload: Record<string, any>) {
   } catch (_) {}
 }
 
-function __dbgJwtMeta__(token: string | null) {
-  if (!token) return { hasToken: false };
+function readJwtPayload(token: string | null): Record<string, any> | null {
+  if (!token) return null;
   try {
     const parts = token.split(".");
-    if (parts.length < 2) return { hasToken: true, jwt: "invalid" };
+    if (parts.length < 2) return null;
     const base64Url = parts[1];
     const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(base64Url.length / 4) * 4, "=");
-    const json = JSON.parse(atob(base64));
-    const expMs = typeof json.exp === "number" ? json.exp * 1000 : null;
-    return {
-      hasToken: true,
-      sub: json.sub,
-      exp: json.exp,
-      expMs,
-      expInMs: expMs ? expMs - Date.now() : null,
-      aud: json.aud,
-      iss: json.iss,
-    };
+    return JSON.parse(atob(base64));
   } catch (_) {
-    return { hasToken: true, jwt: "unparseable" };
+    return null;
   }
+}
+
+function getJwtExpiresInMs(token: string | null) {
+  const payload = readJwtPayload(token);
+  return typeof payload?.exp === "number" ? payload.exp * 1000 - Date.now() : null;
+}
+
+function __dbgJwtMeta__(token: string | null) {
+  if (!token) return { hasToken: false };
+  const json = readJwtPayload(token);
+  if (!json) return { hasToken: true, jwt: "unparseable" };
+  const expMs = typeof json.exp === "number" ? json.exp * 1000 : null;
+  return {
+    hasToken: true,
+    sub: json.sub,
+    exp: json.exp,
+    expMs,
+    expInMs: expMs ? expMs - Date.now() : null,
+    aud: json.aud,
+    iss: json.iss,
+  };
 }
 //#endregion debug-point follow-auth-after-login
 
@@ -138,7 +149,12 @@ export function syncAuthToken(token: string | null) {
  * 获取当前用户的认证 Token（多层容错）
  */
 async function getAuthToken(): Promise<string | null> {
-  if (cachedAuthToken) return cachedAuthToken;
+  if (cachedAuthToken) {
+    const expiresInMs = getJwtExpiresInMs(cachedAuthToken);
+    if (expiresInMs === null || expiresInMs > 60 * 1000) {
+      return cachedAuthToken;
+    }
+  }
 
   try {
     // 第一步：从缓存获取 session
@@ -200,6 +216,10 @@ async function getAuthToken(): Promise<string | null> {
     //#endregion debug-point follow-auth-after-login
     return null;
   }
+}
+
+export async function getCurrentAuthToken(): Promise<string | null> {
+  return getAuthToken();
 }
 
 /**

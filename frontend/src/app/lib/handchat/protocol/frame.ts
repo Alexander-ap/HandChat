@@ -41,6 +41,7 @@ export function buildFramePayload(params: {
   crop?: FrameCrop;
   fpsActual?: number;
   devicePixelRatio?: number;
+  mirror?: boolean;
 }): FramePayload {
   return {
     session_id: params.sessionId,
@@ -56,6 +57,7 @@ export function buildFramePayload(params: {
     client_metadata: {
       fps_actual: params.fpsActual,
       device_pixel_ratio: params.devicePixelRatio,
+      mirror: params.mirror,
     },
   };
 }

@@ -6,10 +6,20 @@ import type {
   KeypointsPayload,
 } from "../types";
 
+function finiteNumber(value: number | undefined, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function positiveNumber(value: number, fallback = 1) {
+  const finite = finiteNumber(value, fallback);
+  return finite > 0 ? finite : fallback;
+}
+
 function clamp01(value: number) {
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
+  const finite = finiteNumber(value);
+  if (finite < 0) return 0;
+  if (finite > 1) return 1;
+  return finite;
 }
 
 function normalizeLandmarks2D(
@@ -17,18 +27,21 @@ function normalizeLandmarks2D(
   width: number,
   height: number
 ): HandLandmark2D[] {
+  const safeWidth = positiveNumber(width);
+  const safeHeight = positiveNumber(height);
+
   return landmarks.map((p) => ({
-    x: clamp01(p.x / width),
-    y: clamp01(p.y / height),
-    z: typeof p.z === "number" ? p.z : 0,
+    x: clamp01(finiteNumber(p.x) / safeWidth),
+    y: clamp01(finiteNumber(p.y) / safeHeight),
+    z: finiteNumber(p.z),
   }));
 }
 
 function mapLandmarks3D(landmarks: Array<{ x: number; y: number; z: number }>): HandLandmark3D[] {
   return landmarks.map((p) => ({
-    x: p.x,
-    y: p.y,
-    z: p.z,
+    x: finiteNumber(p.x),
+    y: finiteNumber(p.y),
+    z: finiteNumber(p.z),
   }));
 }
 
@@ -38,10 +51,17 @@ export function projectLandmarksToFrame(params: {
   outputWidth: number;
   outputHeight: number;
 }) {
+  const cropX = finiteNumber(params.crop.x);
+  const cropY = finiteNumber(params.crop.y);
+  const cropWidth = positiveNumber(params.crop.width, positiveNumber(params.outputWidth));
+  const cropHeight = positiveNumber(params.crop.height, positiveNumber(params.outputHeight));
+  const outputWidth = positiveNumber(params.outputWidth);
+  const outputHeight = positiveNumber(params.outputHeight);
+
   return params.landmarks.map((point) => ({
-    x: ((point.x - params.crop.x) / params.crop.width) * params.outputWidth,
-    y: ((point.y - params.crop.y) / params.crop.height) * params.outputHeight,
-    z: point.z,
+    x: finiteNumber(((finiteNumber(point.x) - cropX) / cropWidth) * outputWidth),
+    y: finiteNumber(((finiteNumber(point.y) - cropY) / cropHeight) * outputHeight),
+    z: finiteNumber(point.z),
   }));
 }
 
@@ -59,7 +79,7 @@ export function buildKeypointsPayload(params: {
 }): KeypointsPayload {
   const mappedHands: DetectedHandPayload[] = params.hands.map((hand) => ({
     handedness: hand.handedness,
-    score: hand.score,
+    score: clamp01(hand.score),
     keypoints: normalizeLandmarks2D(hand.keypoints, params.imageWidth, params.imageHeight),
     keypoints_3d: hand.keypoints3D ? mapLandmarks3D(hand.keypoints3D) : [],
   }));

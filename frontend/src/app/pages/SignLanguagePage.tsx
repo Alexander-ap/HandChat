@@ -51,7 +51,7 @@ import {
   getUploadedCount,
   type TokenResult,
 } from "../lib/signLanguageStore";
-import { supabase } from "../lib/supabase";
+import { getCurrentAuthToken } from "../lib/api";
 import { useLanguage } from "../contexts/LanguageContext";
 
 interface ProtocolPreviewState {
@@ -144,6 +144,7 @@ export default function SignLanguagePage() {
   const requestRef = useRef<number | null>(null);
   const recognizingRef = useRef(false);
   const frameIdRef = useRef(0);
+  const lastServerFrameSentAtRef = useRef(0);
   const [modelLoading, setModelLoading] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(savedState.uploadedImage || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -154,6 +155,7 @@ export default function SignLanguagePage() {
     savedState.liveMode || getStoredHandChatLiveMode()
   );
   const [activeSessionId, setActiveSessionId] = useState(savedState.activeSessionId || "");
+  const activeSessionIdRef = useRef(savedState.activeSessionId || "");
   const [resumableSessionId, setResumableSessionId] = useState<string | null>(
     savedState.resumableSessionId || getActiveBrowserSessionId()
   );
@@ -167,7 +169,7 @@ export default function SignLanguagePage() {
     listBrowserSessions(3)
   );
   const [wsStatus, setWsStatus] = useState<"idle" | "connecting" | "connected" | "reconnecting" | "error">("idle");
-  const [serviceNotice, setServiceNotice] = useState(savedState.serviceNotice || "");
+  const [serviceNotice, setServiceNotice] = useState("");
   const [protocolPreview, setProtocolPreview] = useState<ProtocolPreviewState>(
     savedState.protocolPreview || {
       frameId: -1,
@@ -236,6 +238,11 @@ export default function SignLanguagePage() {
     }
   }, []);
 
+  const updateActiveSessionId = useCallback((sessionId: string) => {
+    activeSessionIdRef.current = sessionId;
+    setActiveSessionId(sessionId);
+  }, []);
+
   useEffect(() => {
     setStoredHandChatLiveMode(liveMode);
   }, [liveMode]);
@@ -284,6 +291,14 @@ export default function SignLanguagePage() {
           : sessions.find((item) => item.status === "active")?.id ?? null
       );
 
+      if (sourceMode === "server") {
+        setServiceNotice(
+          targetSessionId
+            ? "真实服务会话已同步，可继续识别。"
+            : "真实服务会话接口已连接，点击开始识别后将连接 WebSocket。"
+        );
+      }
+
       if (targetSessionId) {
         const history = await source.getSessionHistory(targetSessionId, 50);
         setSessionHistory(history);
@@ -309,7 +324,7 @@ export default function SignLanguagePage() {
     const nextFrameId = history[0]?.frameId != null ? history[0].frameId + 1 : 0;
 
     frameIdRef.current = nextFrameId;
-    setActiveSessionId(summary.id);
+    updateActiveSessionId(summary.id);
     setSessionHistory(history);
     setTextResult(buildCommittedText(history) || PLACEHOLDER_TEXT);
     setPartialResult("");
@@ -319,7 +334,7 @@ export default function SignLanguagePage() {
     setServiceNotice("当前使用浏览器本地模式，不依赖后端网络。");
 
     return summary.id;
-  }, []);
+  }, [updateActiveSessionId]);
 
   const pushTranslationPayload = useCallback((payload: {
     session_id: string;
@@ -347,7 +362,12 @@ export default function SignLanguagePage() {
 
     if (payload.type === "partial") {
       setPartialResult(payload.text);
+      setLiveCurrentSign(payload.text);
       return;
+    }
+
+    if (payload.type === "final" || payload.type === "sentence_final") {
+      setLiveCurrentSign(payload.text);
     }
 
     if (payload.type === "final" || payload.type === "sentence_final" || payload.type === "sentence_end") {
@@ -365,12 +385,7 @@ export default function SignLanguagePage() {
     return new HandChatWsClient(
       {
         url: HANDCHAT_DEFAULT_WS_URL,
-        getAccessToken: async () => {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          return session?.access_token ?? null;
-        },
+        getAccessToken: getCurrentAuthToken,
       },
       {
         onOpen: () => {
@@ -396,8 +411,12 @@ export default function SignLanguagePage() {
           setWsStatus("error");
           setServiceNotice("多次重连失败，建议切回浏览器本地模式继续识别。");
         },
+        onSessionCreated: (payload) => {
+          updateActiveSessionId(payload.id);
+          setResumableSessionId(payload.id);
+        },
         onMessage: (message) => {
-          if (message.type === "translation" && message.payload.type === "sentence_final") {
+          if (message.type === "translation") {
             pushTranslationPayload(message.payload);
           }
 
@@ -409,7 +428,7 @@ export default function SignLanguagePage() {
         },
       }
     );
-  }, [pushTranslationPayload]);
+  }, [pushTranslationPayload, updateActiveSessionId]);
 
   const closeCurrentSession = useCallback((showToast = true) => {
     if (!activeSessionId) {
@@ -435,12 +454,12 @@ export default function SignLanguagePage() {
     window.setTimeout(() => {
       void refreshSessionViews(activeSessionId);
     }, liveMode === "server" ? 300 : 0);
-    setActiveSessionId("");
+    updateActiveSessionId("");
 
     if (showToast) {
       toast("已停止摄像，会话已结束");
     }
-  }, [activeSessionId, liveMode, refreshSessionViews]);
+  }, [activeSessionId, liveMode, refreshSessionViews, updateActiveSessionId]);
 
   const handleChangeLiveMode = (mode: HandChatLiveMode) => {
     if (recognizing) {
@@ -550,7 +569,7 @@ export default function SignLanguagePage() {
 
       if (!detectorRef.current) {
         try {
-          detectorRef.current = await createHandDetector({ maxHands: 1 });
+          detectorRef.current = await createHandDetector({ maxHands: 2 });
         } catch (err: any) {
           toast.error("加载手势识别AI模型失败：" + err.message);
           setModelLoading(false);
@@ -657,9 +676,9 @@ export default function SignLanguagePage() {
       captureCanvasRef.current ??= document.createElement("canvas");
       toast("正在加载 AI 模型，请稍候...");
 
-      if (!detectorRef.current) {
+      if (liveMode === "browser" && !detectorRef.current) {
         try {
-          detectorRef.current = await createHandDetector({ maxHands: 1 });
+          detectorRef.current = await createHandDetector({ maxHands: 2 });
         } catch (e: any) {
           throw new Error("加载手势模型失败 (请检查网络/跨域限制): " + e.message);
         }
@@ -746,7 +765,7 @@ export default function SignLanguagePage() {
         const source = createSessionDataSource("server");
         const history = await source.getSessionHistory(sessionId, 50).catch(() => []);
         frameIdRef.current = history[0]?.frameId != null ? history[0].frameId + 1 : 0;
-        setActiveSessionId(sessionId);
+        updateActiveSessionId(sessionId);
         setSessionHistory(history);
         setTextResult(buildCommittedText(history) || PLACEHOLDER_TEXT);
         setPartialResult("");
@@ -803,7 +822,6 @@ export default function SignLanguagePage() {
         if (
           !recognizingRef.current ||
           !videoRef.current ||
-          !detectorRef.current ||
           !canvasRef.current ||
           !captureCanvasRef.current
         ) {
@@ -821,29 +839,31 @@ export default function SignLanguagePage() {
             }
 
             let hands: any[] = [];
-            try {
-              hands = await detectorRef.current.estimateHands(videoRef.current, { flipHorizontal: false });
-              consecutiveErrors = 0;
-            } catch (detectErr: any) {
-              consecutiveErrors++;
-              console.warn(`检测错误 (${consecutiveErrors}):`, detectErr);
+            if (detectorRef.current) {
+              try {
+                hands = await detectorRef.current.estimateHands(videoRef.current, { flipHorizontal: false });
+                consecutiveErrors = 0;
+              } catch (detectErr: any) {
+                consecutiveErrors++;
+                console.warn(`检测错误 (${consecutiveErrors}):`, detectErr);
 
-              if (consecutiveErrors > 10) {
-                try {
-                  (detectorRef.current as { dispose?: () => void } | null)?.dispose?.();
-                } catch (_error) {
-                  console.warn("释放旧模型失败", _error);
+                if (consecutiveErrors > 10) {
+                  try {
+                    (detectorRef.current as { dispose?: () => void } | null)?.dispose?.();
+                  } catch (_error) {
+                    console.warn("释放旧模型失败", _error);
+                  }
+
+                  detectorRef.current = await createHandDetector({ maxHands: 2 });
+                  consecutiveErrors = 0;
+                  toast.info("AI引擎已自动重建");
                 }
 
-                detectorRef.current = await createHandDetector({ maxHands: 1 });
-                consecutiveErrors = 0;
-                toast.info("AI引擎已自动重建");
+                if (recognizingRef.current) {
+                  requestRef.current = requestAnimationFrame(detectFrame);
+                }
+                return;
               }
-
-              if (recognizingRef.current) {
-                requestRef.current = requestAnimationFrame(detectFrame);
-              }
-              return;
             }
 
             const ctx = canvasRef.current.getContext("2d");
@@ -949,9 +969,10 @@ export default function SignLanguagePage() {
             };
             const frameId = frameIdRef.current++;
             const timestampMs = Date.now();
+            const currentSessionId = activeSessionIdRef.current || sessionId;
             const imageBase64Jpeg = await canvasToJpegBase64(captureCanvasRef.current, 0.85);
             const framePayload = buildFramePayload({
-              sessionId,
+              sessionId: currentSessionId,
               frameId,
               timestampMs,
               imageBase64Jpeg,
@@ -960,9 +981,10 @@ export default function SignLanguagePage() {
               crop,
               fpsActual: detectionFps || undefined,
               devicePixelRatio: window.devicePixelRatio,
+              mirror: true,
             });
             const keypointsPayload = buildKeypointsPayload({
-              sessionId,
+              sessionId: currentSessionId,
               frameId,
               hands: hands.map((hand) => ({
                 handedness: String(hand.handedness).includes("Left") ? "Left" : "Right",
@@ -983,11 +1005,9 @@ export default function SignLanguagePage() {
               imageHeight: capture.height,
             });
 
-            if (liveMode === "server") {
+            if (liveMode === "server" && timestampMs - lastServerFrameSentAtRef.current >= 100) {
+              lastServerFrameSentAtRef.current = timestampMs;
               wsClientRef.current?.sendFrame(framePayload);
-              if (keypointsPayload.hands.length > 0) {
-                wsClientRef.current?.sendKeypoints(keypointsPayload);
-              }
             }
 
             if (frameId % 5 === 0) {
@@ -999,26 +1019,25 @@ export default function SignLanguagePage() {
               });
             }
 
-            const currentSign = hands.length > 0 ? guessSign(hands[0]) : "";
-            const result = signTrackerRef.current.update(currentSign);
-            setLiveCurrentSign((prev) => (prev !== result.liveSign ? result.liveSign : prev));
+            if (liveMode === "browser") {
+              const currentSign = hands.length > 0 ? guessSign(hands[0]) : "";
+              const result = signTrackerRef.current.update(currentSign);
+              setLiveCurrentSign((prev) => (prev !== result.liveSign ? result.liveSign : prev));
 
-            const messages = translationStreamRef.current.update({
-              sessionId,
-              frameId,
-              timestampMs,
-              liveSign: result.liveSign,
-              confirmedSign: result.confirmedSign,
-            });
+              const messages = translationStreamRef.current.update({
+                sessionId: currentSessionId,
+                frameId,
+                timestampMs,
+                liveSign: result.liveSign,
+                confirmedSign: result.confirmedSign,
+              });
 
-            messages.forEach((payload) => {
-              pushTranslationPayload(payload);
-              if (liveMode === "server") {
-                wsClientRef.current?.sendTranslation(payload);
-              }
-            });
+              messages.forEach((payload) => {
+                pushTranslationPayload(payload);
+              });
+            }
 
-            if (!hands.length) {
+            if (liveMode === "browser" && !hands.length) {
               setLiveCurrentSign((prev) => (prev !== "" ? "" : prev));
             }
           }
