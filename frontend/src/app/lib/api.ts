@@ -845,3 +845,13 @@ export const authApi = {
     return body;
   },
 };
+
+// ============================================================
+// 成就 API
+// ============================================================
+
+export const achievementsApi = {
+  async getAll() {
+    return apiCall('/achievements');
+  },
+};

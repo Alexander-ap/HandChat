@@ -52,7 +52,6 @@ import {
   type TokenResult,
 } from "../lib/signLanguageStore";
 import { getCurrentAuthToken } from "../lib/api";
-import { useLanguage } from "../contexts/LanguageContext";
 
 interface ProtocolPreviewState {
   frameId: number;
@@ -120,7 +119,7 @@ function getWsStatusLabel(status: "idle" | "connecting" | "connected" | "reconne
 }
 
 export default function SignLanguagePage() {
-  const { text } = useLanguage();
+  const text = (zh: string, _en?: string) => zh;
   const navigate = useNavigate();
   const { getPageState, setPageState } = useOutletContext<PageStateContext>();
   const savedState = getPageState("signLanguage") || {};

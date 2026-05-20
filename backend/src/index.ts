@@ -2,11 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import crypto from 'crypto'
 import { config } from './config';
 import { logger } from './logger';
-import { AppError, sendError } from './http';
-import { createRateLimit } from './middleware/rateLimit';
 import { handleConnection } from './wsRouter';
 import sessionRoutes from './routes/sessionRoutes';
 import postRoutes from './routes/postRoutes';
@@ -27,7 +24,6 @@ app.use(cors({
     const requestOrigin = origin ?? '';
     const isLocalDevOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(:\d+)?$/i.test(requestOrigin);
 
-    // Allow non-browser clients and local-network development hosts.
     if (!origin || allowedOrigins.includes(origin) || isLocalDevOrigin) {
       callback(null, true);
       return;
@@ -38,27 +34,6 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
 }));
 app.use(express.json({ limit: '1mb' }));
-app.use((req, res, next) => {
-  req.requestId = crypto.randomUUID()
-  const start = Date.now()
-  logger.info('HTTP request started', {
-    requestId: req.requestId,
-    method: req.method,
-    path: req.path,
-    ip: req.ip,
-  })
-  res.on('finish', () => {
-    logger.info('HTTP request finished', {
-      requestId: req.requestId,
-      method: req.method,
-      path: req.path,
-      status: res.statusCode,
-      durationMs: Date.now() - start,
-    })
-  })
-  next()
-});
-app.use('/api', createRateLimit('api-global', 240, 60 * 1000))
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', time: Date.now() }));
 app.use('/api/sessions', sessionRoutes);
@@ -69,22 +44,8 @@ app.use('/api/achievements', achievementRoutes);
 app.use('/api/points', pointsRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  const req = _req
-  const appError = err instanceof AppError ? err : null
-  logger.error('Unhandled API error', {
-    requestId: req.requestId,
-    error: err.message,
-    stack: err.stack,
-    code: appError?.code || 'INTERNAL_ERROR',
-  });
-  sendError(
-    res,
-    req,
-    appError?.status || 500,
-    appError?.code || 'INTERNAL_ERROR',
-    appError?.message || (config.nodeEnv === 'development' ? err.message : 'Internal server error'),
-    appError?.details
-  );
+  logger.error('Unhandled API error', { error: err.message, stack: err.stack });
+  res.status(500).json({ error: config.nodeEnv === 'development' ? err.message : 'Internal server error' });
 });
 
 wss.on('connection', (ws: WebSocket & { isAlive?: boolean }) => {
