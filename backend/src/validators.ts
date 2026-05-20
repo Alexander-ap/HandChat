@@ -5,7 +5,7 @@ export function sendError(ws: WebSocket, traceId: string, code: number, message:
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
       type: 'error',
-      payload: { code, message },
+      payload: { code, error: message },
       trace_id: traceId,
       timestamp_ms: Date.now(),
     }));
@@ -13,8 +13,11 @@ export function sendError(ws: WebSocket, traceId: string, code: number, message:
 }
 
 export function validateSessionStart(payload: Record<string, unknown>): string | null {
-  if (!payload.session_id || typeof payload.session_id !== 'string') {
-    return '缺少 session_id 字段';
+  if (!payload.token || typeof payload.token !== 'string') {
+    return '缺少 token 字段';
+  }
+  if (payload.resume_session_id !== undefined && typeof payload.resume_session_id !== 'string') {
+    return 'resume_session_id 必须是字符串';
   }
   return null;
 }
@@ -80,13 +83,18 @@ export function validateKeypointsMessage(payload: Record<string, unknown>): stri
       }
     }
 
-    if (!Array.isArray(hand.keypoints_3d) || hand.keypoints_3d.length !== 21) {
-      return `hands[${hi}].keypoints_3d 必须是长度为 21 的数组`;
-    }
-    for (let wi = 0; wi < (hand.keypoints_3d as unknown[]).length; wi++) {
-      const wp = (hand.keypoints_3d as unknown[])[wi] as Record<string, unknown>;
-      if (typeof wp.x !== 'number' || typeof wp.y !== 'number' || typeof wp.z !== 'number') {
-        return `hands[${hi}].keypoints_3d[${wi}] 缺少 x/y/z 坐标`;
+    if (hand.keypoints_3d !== undefined) {
+      if (!Array.isArray(hand.keypoints_3d)) {
+        return `hands[${hi}].keypoints_3d 必须是数组`;
+      }
+      if (hand.keypoints_3d.length !== 0 && hand.keypoints_3d.length !== 21) {
+        return `hands[${hi}].keypoints_3d 必须为空或长度为 21 的数组`;
+      }
+      for (let wi = 0; wi < (hand.keypoints_3d as unknown[]).length; wi++) {
+        const wp = (hand.keypoints_3d as unknown[])[wi] as Record<string, unknown>;
+        if (typeof wp.x !== 'number' || typeof wp.y !== 'number' || typeof wp.z !== 'number') {
+          return `hands[${hi}].keypoints_3d[${wi}] 缺少 x/y/z 坐标`;
+        }
       }
     }
   }
@@ -98,8 +106,11 @@ export function validateTranslationMessage(payload: Record<string, unknown>): st
   if (!payload.session_id || typeof payload.session_id !== 'string') {
     return '缺少 session_id';
   }
-  if (!payload.text || typeof payload.text !== 'string' || payload.text.trim().length === 0) {
-    return 'translation 消息缺少 text 字段或 text 为空';
+  if (typeof payload.text !== 'string') {
+    return 'translation 消息缺少 text 字段';
+  }
+  if (payload.type !== 'sentence_end' && payload.text.trim().length === 0) {
+    return 'translation 消息 text 为空';
   }
   if (payload.frame_id !== undefined && typeof payload.frame_id !== 'number') {
     return 'frame_id 必须是数值';

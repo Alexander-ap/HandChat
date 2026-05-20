@@ -31,6 +31,7 @@ export interface FrameImagePayload {
 export interface FrameClientMetadata {
   fps_actual?: number;
   device_pixel_ratio?: number;
+  mirror?: boolean;
 }
 
 export interface FramePayload {

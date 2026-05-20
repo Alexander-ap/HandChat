@@ -1,5 +1,5 @@
 import { publicAnonKey } from "/utils/supabase/info";
-import { supabase } from "../supabase";
+import { getCurrentAuthToken } from "../api";
 import type {
   ApiErrorResponse,
   SessionDetail,
@@ -15,11 +15,7 @@ export interface SessionApiConfig {
 }
 
 async function defaultGetAccessToken() {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  return session?.access_token ?? null;
+  return getCurrentAuthToken();
 }
 
 export class HandChatSessionApi {
@@ -29,7 +25,7 @@ export class HandChatSessionApi {
 
   constructor(config: SessionApiConfig = {}) {
     this.baseUrl = config.baseUrl ?? HANDCHAT_DEFAULT_API_URL;
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    this.fetchImpl = config.fetchImpl ?? ((input, init) => fetch(input, init));
     this.getAccessToken = config.getAccessToken ?? defaultGetAccessToken;
   }
 

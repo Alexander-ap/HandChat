@@ -35,6 +35,11 @@ function fromCode(code?: number): HandChatErrorDescriptor | null {
         title: "服务器繁忙",
         message: "服务端过载，建议切回浏览器本地模式继续使用。",
       };
+    case 5030:
+      return {
+        title: "模型推理繁忙",
+        message: "CE-CSL 推理超时或繁忙，系统会继续重试；如果长时间无结果，请重启 Python 模型服务。",
+      };
     default:
       return null;
   }
@@ -49,8 +54,17 @@ export function mapHandChatError(error: unknown): HandChatErrorDescriptor {
   }
 
   if (typeof error === "object" && error && "code" in error) {
-    const mapped = fromCode(Number((error as { code?: number }).code));
+    const payload = error as { code?: number; error?: string; message?: string };
+    const mapped = fromCode(Number(payload.code));
+    const serverMessage = payload.error || payload.message;
     if (mapped) {
+      if (payload.code === 4001 && serverMessage?.trim()) {
+        return {
+          title: mapped.title,
+          message: serverMessage,
+        };
+      }
+
       return mapped;
     }
   }

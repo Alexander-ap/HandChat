@@ -51,7 +51,8 @@ import {
   getUploadedCount,
   type TokenResult,
 } from "../lib/signLanguageStore";
-import { supabase } from "../lib/supabase";
+import { getCurrentAuthToken } from "../lib/api";
+import { useLanguage } from "../contexts/LanguageContext";
 
 interface ProtocolPreviewState {
   frameId: number;
@@ -119,6 +120,7 @@ function getWsStatusLabel(status: "idle" | "connecting" | "connected" | "reconne
 }
 
 export default function SignLanguagePage() {
+  const { text } = useLanguage();
   const navigate = useNavigate();
   const { getPageState, setPageState } = useOutletContext<PageStateContext>();
   const savedState = getPageState("signLanguage") || {};
@@ -127,7 +129,7 @@ export default function SignLanguagePage() {
   const [recognizing, setRecognizing] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [tokenResults, setTokenResults] = useState<TokenResult[]>(savedState.tokenResults || []);
-  const [textResult, setTextResult] = useState(savedState.textResult || "");
+  const [textResult, setTextResult] = useState<string>(savedState.textResult || "");
   const [partialResult, setPartialResult] = useState(savedState.partialResult || "");
   const [showLibraryManager, setShowLibraryManager] = useState(false);
   const [uploadedCount, setUploadedCount] = useState(0);
@@ -142,6 +144,7 @@ export default function SignLanguagePage() {
   const requestRef = useRef<number | null>(null);
   const recognizingRef = useRef(false);
   const frameIdRef = useRef(0);
+  const lastServerFrameSentAtRef = useRef(0);
   const [modelLoading, setModelLoading] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(savedState.uploadedImage || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +155,7 @@ export default function SignLanguagePage() {
     savedState.liveMode || getStoredHandChatLiveMode()
   );
   const [activeSessionId, setActiveSessionId] = useState(savedState.activeSessionId || "");
+  const activeSessionIdRef = useRef(savedState.activeSessionId || "");
   const [resumableSessionId, setResumableSessionId] = useState<string | null>(
     savedState.resumableSessionId || getActiveBrowserSessionId()
   );
@@ -165,7 +169,7 @@ export default function SignLanguagePage() {
     listBrowserSessions(3)
   );
   const [wsStatus, setWsStatus] = useState<"idle" | "connecting" | "connected" | "reconnecting" | "error">("idle");
-  const [serviceNotice, setServiceNotice] = useState(savedState.serviceNotice || "");
+  const [serviceNotice, setServiceNotice] = useState("");
   const [protocolPreview, setProtocolPreview] = useState<ProtocolPreviewState>(
     savedState.protocolPreview || {
       frameId: -1,
@@ -234,6 +238,11 @@ export default function SignLanguagePage() {
     }
   }, []);
 
+  const updateActiveSessionId = useCallback((sessionId: string) => {
+    activeSessionIdRef.current = sessionId;
+    setActiveSessionId(sessionId);
+  }, []);
+
   useEffect(() => {
     setStoredHandChatLiveMode(liveMode);
   }, [liveMode]);
@@ -282,6 +291,14 @@ export default function SignLanguagePage() {
           : sessions.find((item) => item.status === "active")?.id ?? null
       );
 
+      if (sourceMode === "server") {
+        setServiceNotice(
+          targetSessionId
+            ? "真实服务会话已同步，可继续识别。"
+            : "真实服务会话接口已连接，点击开始识别后将连接 WebSocket。"
+        );
+      }
+
       if (targetSessionId) {
         const history = await source.getSessionHistory(targetSessionId, 50);
         setSessionHistory(history);
@@ -307,7 +324,7 @@ export default function SignLanguagePage() {
     const nextFrameId = history[0]?.frameId != null ? history[0].frameId + 1 : 0;
 
     frameIdRef.current = nextFrameId;
-    setActiveSessionId(summary.id);
+    updateActiveSessionId(summary.id);
     setSessionHistory(history);
     setTextResult(buildCommittedText(history) || PLACEHOLDER_TEXT);
     setPartialResult("");
@@ -317,7 +334,7 @@ export default function SignLanguagePage() {
     setServiceNotice("当前使用浏览器本地模式，不依赖后端网络。");
 
     return summary.id;
-  }, []);
+  }, [updateActiveSessionId]);
 
   const pushTranslationPayload = useCallback((payload: {
     session_id: string;
@@ -345,7 +362,12 @@ export default function SignLanguagePage() {
 
     if (payload.type === "partial") {
       setPartialResult(payload.text);
+      setLiveCurrentSign(payload.text);
       return;
+    }
+
+    if (payload.type === "final" || payload.type === "sentence_final") {
+      setLiveCurrentSign(payload.text);
     }
 
     if (payload.type === "final" || payload.type === "sentence_final" || payload.type === "sentence_end") {
@@ -363,12 +385,7 @@ export default function SignLanguagePage() {
     return new HandChatWsClient(
       {
         url: HANDCHAT_DEFAULT_WS_URL,
-        getAccessToken: async () => {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          return session?.access_token ?? null;
-        },
+        getAccessToken: getCurrentAuthToken,
       },
       {
         onOpen: () => {
@@ -394,8 +411,12 @@ export default function SignLanguagePage() {
           setWsStatus("error");
           setServiceNotice("多次重连失败，建议切回浏览器本地模式继续识别。");
         },
+        onSessionCreated: (payload) => {
+          updateActiveSessionId(payload.id);
+          setResumableSessionId(payload.id);
+        },
         onMessage: (message) => {
-          if (message.type === "translation" && message.payload.type === "sentence_final") {
+          if (message.type === "translation") {
             pushTranslationPayload(message.payload);
           }
 
@@ -407,7 +428,7 @@ export default function SignLanguagePage() {
         },
       }
     );
-  }, [pushTranslationPayload]);
+  }, [pushTranslationPayload, updateActiveSessionId]);
 
   const closeCurrentSession = useCallback((showToast = true) => {
     if (!activeSessionId) {
@@ -433,12 +454,12 @@ export default function SignLanguagePage() {
     window.setTimeout(() => {
       void refreshSessionViews(activeSessionId);
     }, liveMode === "server" ? 300 : 0);
-    setActiveSessionId("");
+    updateActiveSessionId("");
 
     if (showToast) {
       toast("已停止摄像，会话已结束");
     }
-  }, [activeSessionId, liveMode, refreshSessionViews]);
+  }, [activeSessionId, liveMode, refreshSessionViews, updateActiveSessionId]);
 
   const handleChangeLiveMode = (mode: HandChatLiveMode) => {
     if (recognizing) {
@@ -548,7 +569,7 @@ export default function SignLanguagePage() {
 
       if (!detectorRef.current) {
         try {
-          detectorRef.current = await createHandDetector({ maxHands: 1 });
+          detectorRef.current = await createHandDetector({ maxHands: 2 });
         } catch (err: any) {
           toast.error("加载手势识别AI模型失败：" + err.message);
           setModelLoading(false);
@@ -607,7 +628,7 @@ export default function SignLanguagePage() {
               hand.keypoints.forEach((kp, idx) => {
                 let depthScale = 1;
                 if (hand.keypoints3D && hand.keypoints3D[idx]) {
-                  const z = hand.keypoints3D[idx].z;
+                  const z = hand.keypoints3D[idx]?.z ?? 0;
                   depthScale = Math.max(0.4, 1 - z * 8);
                 }
                 const baseRadius = Math.max(3, img.width / 100);
@@ -655,9 +676,9 @@ export default function SignLanguagePage() {
       captureCanvasRef.current ??= document.createElement("canvas");
       toast("正在加载 AI 模型，请稍候...");
 
-      if (!detectorRef.current) {
+      if (liveMode === "browser" && !detectorRef.current) {
         try {
-          detectorRef.current = await createHandDetector({ maxHands: 1 });
+          detectorRef.current = await createHandDetector({ maxHands: 2 });
         } catch (e: any) {
           throw new Error("加载手势模型失败 (请检查网络/跨域限制): " + e.message);
         }
@@ -744,7 +765,7 @@ export default function SignLanguagePage() {
         const source = createSessionDataSource("server");
         const history = await source.getSessionHistory(sessionId, 50).catch(() => []);
         frameIdRef.current = history[0]?.frameId != null ? history[0].frameId + 1 : 0;
-        setActiveSessionId(sessionId);
+        updateActiveSessionId(sessionId);
         setSessionHistory(history);
         setTextResult(buildCommittedText(history) || PLACEHOLDER_TEXT);
         setPartialResult("");
@@ -801,7 +822,6 @@ export default function SignLanguagePage() {
         if (
           !recognizingRef.current ||
           !videoRef.current ||
-          !detectorRef.current ||
           !canvasRef.current ||
           !captureCanvasRef.current
         ) {
@@ -819,29 +839,31 @@ export default function SignLanguagePage() {
             }
 
             let hands: any[] = [];
-            try {
-              hands = await detectorRef.current.estimateHands(videoRef.current, { flipHorizontal: false });
-              consecutiveErrors = 0;
-            } catch (detectErr: any) {
-              consecutiveErrors++;
-              console.warn(`检测错误 (${consecutiveErrors}):`, detectErr);
+            if (detectorRef.current) {
+              try {
+                hands = await detectorRef.current.estimateHands(videoRef.current, { flipHorizontal: false });
+                consecutiveErrors = 0;
+              } catch (detectErr: any) {
+                consecutiveErrors++;
+                console.warn(`检测错误 (${consecutiveErrors}):`, detectErr);
 
-              if (consecutiveErrors > 10) {
-                try {
-                  (detectorRef.current as { dispose?: () => void } | null)?.dispose?.();
-                } catch (_error) {
-                  console.warn("释放旧模型失败", _error);
+                if (consecutiveErrors > 10) {
+                  try {
+                    (detectorRef.current as { dispose?: () => void } | null)?.dispose?.();
+                  } catch (_error) {
+                    console.warn("释放旧模型失败", _error);
+                  }
+
+                  detectorRef.current = await createHandDetector({ maxHands: 2 });
+                  consecutiveErrors = 0;
+                  toast.info("AI引擎已自动重建");
                 }
 
-                detectorRef.current = await createHandDetector({ maxHands: 1 });
-                consecutiveErrors = 0;
-                toast.info("AI引擎已自动重建");
+                if (recognizingRef.current) {
+                  requestRef.current = requestAnimationFrame(detectFrame);
+                }
+                return;
               }
-
-              if (recognizingRef.current) {
-                requestRef.current = requestAnimationFrame(detectFrame);
-              }
-              return;
             }
 
             const ctx = canvasRef.current.getContext("2d");
@@ -947,9 +969,10 @@ export default function SignLanguagePage() {
             };
             const frameId = frameIdRef.current++;
             const timestampMs = Date.now();
+            const currentSessionId = activeSessionIdRef.current || sessionId;
             const imageBase64Jpeg = await canvasToJpegBase64(captureCanvasRef.current, 0.85);
             const framePayload = buildFramePayload({
-              sessionId,
+              sessionId: currentSessionId,
               frameId,
               timestampMs,
               imageBase64Jpeg,
@@ -958,9 +981,10 @@ export default function SignLanguagePage() {
               crop,
               fpsActual: detectionFps || undefined,
               devicePixelRatio: window.devicePixelRatio,
+              mirror: true,
             });
             const keypointsPayload = buildKeypointsPayload({
-              sessionId,
+              sessionId: currentSessionId,
               frameId,
               hands: hands.map((hand) => ({
                 handedness: String(hand.handedness).includes("Left") ? "Left" : "Right",
@@ -981,11 +1005,9 @@ export default function SignLanguagePage() {
               imageHeight: capture.height,
             });
 
-            if (liveMode === "server") {
+            if (liveMode === "server" && timestampMs - lastServerFrameSentAtRef.current >= 100) {
+              lastServerFrameSentAtRef.current = timestampMs;
               wsClientRef.current?.sendFrame(framePayload);
-              if (keypointsPayload.hands.length > 0) {
-                wsClientRef.current?.sendKeypoints(keypointsPayload);
-              }
             }
 
             if (frameId % 5 === 0) {
@@ -997,26 +1019,25 @@ export default function SignLanguagePage() {
               });
             }
 
-            const currentSign = hands.length > 0 ? guessSign(hands[0]) : "";
-            const result = signTrackerRef.current.update(currentSign);
-            setLiveCurrentSign((prev) => (prev !== result.liveSign ? result.liveSign : prev));
+            if (liveMode === "browser") {
+              const currentSign = hands.length > 0 ? guessSign(hands[0]) : "";
+              const result = signTrackerRef.current.update(currentSign);
+              setLiveCurrentSign((prev) => (prev !== result.liveSign ? result.liveSign : prev));
 
-            const messages = translationStreamRef.current.update({
-              sessionId,
-              frameId,
-              timestampMs,
-              liveSign: result.liveSign,
-              confirmedSign: result.confirmedSign,
-            });
+              const messages = translationStreamRef.current.update({
+                sessionId: currentSessionId,
+                frameId,
+                timestampMs,
+                liveSign: result.liveSign,
+                confirmedSign: result.confirmedSign,
+              });
 
-            messages.forEach((payload) => {
-              pushTranslationPayload(payload);
-              if (liveMode === "server") {
-                wsClientRef.current?.sendTranslation(payload);
-              }
-            });
+              messages.forEach((payload) => {
+                pushTranslationPayload(payload);
+              });
+            }
 
-            if (!hands.length) {
+            if (liveMode === "browser" && !hands.length) {
               setLiveCurrentSign((prev) => (prev !== "" ? "" : prev));
             }
           }
@@ -1055,24 +1076,26 @@ export default function SignLanguagePage() {
 
   return (
     <div
-      className="min-h-screen pb-20"
+      className="min-h-screen pb-24"
       style={{ background: "var(--app-background, #F2F2F7)" }}
     >
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-xl px-4 pt-12 pb-3 shadow-sm sticky top-0 z-10 border-b border-gray-100 flex justify-center">
-        <div className="w-full max-w-2xl flex items-center justify-between">
-          <div>
-            <h1 className="text-[28px] font-bold text-gray-900 mb-0.5 tracking-tight">
-              手语交互
+      <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-11 pb-3">
+        <div className="w-full max-w-2xl flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal text-[var(--md-sys-color-on-surface)]">
+              {text("手语交互", "Sign Interaction")}
             </h1>
-            <p className="text-[13px] text-gray-500">手语与文字的双向转换</p>
+            <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
+              {text("手语与文字的双向转换", "Two-way conversion between sign language and text")}
+            </p>
           </div>
           <button
             onClick={() => setShowLibraryManager(true)}
-            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+            className="relative flex items-center gap-1.5 rounded-full border border-white/70 bg-white/76 px-3.5 py-2 shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition-colors hover:bg-white"
           >
             <Settings2 className="w-4 h-4 text-gray-600" />
-            <span className="text-[12px] font-medium text-gray-600">图库</span>
+            <span className="text-[12px] font-medium text-gray-600">{text("图库", "Library")}</span>
             <span className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1 border-2 border-white ${
               uploadedCount === SIGN_WORDS.length
                 ? "bg-green-500 text-white"
@@ -1084,9 +1107,9 @@ export default function SignLanguagePage() {
         </div>
       </div>
 
-      <div className="p-3 space-y-3 w-full max-w-2xl mx-auto">
+      <div className="w-full max-w-2xl mx-auto space-y-4 px-4 pt-4">
         <Tabs defaultValue="text-to-sign" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 h-10 bg-gray-100/80 rounded-[12px] p-0.5 mb-3">
+          <TabsList className="mb-4 grid h-12 w-full grid-cols-2 rounded-[18px] border border-white/70 bg-white/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
             <TabsTrigger
               value="text-to-sign"
               className="rounded-[10px] data-[state=active]:bg-white data-[state=active]:shadow-sm text-[14px] font-medium transition-all"
@@ -1106,7 +1129,7 @@ export default function SignLanguagePage() {
           {/* ══════════ 文字转手语 ══════════ */}
           <TabsContent value="text-to-sign" className="mt-0 space-y-3">
             {/* 输入区 */}
-            <div className="bg-white rounded-[16px] p-4 shadow-[0_1px_3px_rgb(0,0,0,0.04)]">
+            <div className="app-panel app-grid-glow rounded-[24px] p-5">
               <label className="block text-[14px] font-medium text-gray-700 mb-2">
                 输入文字
               </label>
@@ -1120,7 +1143,7 @@ export default function SignLanguagePage() {
               <Button
                 onClick={handleTextToSign}
                 disabled={translating}
-                className="w-full h-11 bg-blue-500 hover:bg-blue-600 rounded-[12px] text-[15px] font-medium shadow-[0_4px_14px_0_rgb(59,130,246,0.25)] active:scale-[0.98] transition-all"
+                className="w-full h-12 rounded-[16px] text-[15px] font-medium"
               >
                 {translating ? (
                   <div className="flex items-center gap-2">
@@ -1141,7 +1164,7 @@ export default function SignLanguagePage() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-amber-50 border border-amber-200/60 rounded-[14px] p-3.5 flex items-start gap-2.5"
+                className="rounded-[18px] border border-amber-200/70 bg-amber-50/88 p-4 flex items-start gap-3 shadow-[0_10px_28px_rgba(245,158,11,0.08)]"
               >
                 <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
                 <div>
@@ -1158,7 +1181,7 @@ export default function SignLanguagePage() {
 
             {/* 常用短语 */}
             <div>
-              <h3 className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">
+              <h3 className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                 常用短语
               </h3>
               <div className="flex flex-wrap gap-2">
@@ -1173,8 +1196,8 @@ export default function SignLanguagePage() {
                       }}
                       className={`relative px-3.5 py-2 rounded-full text-[13px] font-medium transition-all active:scale-95 ${
                         hasImage
-                          ? "bg-blue-50 text-blue-600 border border-blue-200/60 shadow-sm"
-                          : "bg-white text-gray-600 border border-gray-100 shadow-[0_1px_2px_rgb(0,0,0,0.04)]"
+                          ? "bg-blue-500/[0.08] text-blue-600 border border-blue-200/60 shadow-[0_10px_24px_rgba(37,99,235,0.08)]"
+                          : "bg-white/72 text-slate-600 border border-white/70 shadow-[0_10px_24px_rgba(15,23,42,0.05)]"
                       }`}
                     >
                       {phrase}
@@ -1192,7 +1215,7 @@ export default function SignLanguagePage() {
               <motion.div
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-[16px] shadow-[0_1px_3px_rgb(0,0,0,0.04)] overflow-hidden"
+                className="app-panel overflow-hidden rounded-[24px]"
               >
                 {/* 头部 */}
                 <div className="px-4 pt-4 pb-2 flex items-center justify-between">
@@ -1347,7 +1370,7 @@ export default function SignLanguagePage() {
 
           {/* ══════════ 手语转文字 ══════════ */}
           <TabsContent value="sign-to-text" className="mt-0 space-y-3">
-            <div className="bg-white rounded-[16px] p-4 shadow-[0_1px_3px_rgb(0,0,0,0.04)]">
+            <div className="app-panel app-grid-glow rounded-[24px] p-5">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
                   <h3 className="text-[15px] font-semibold text-gray-900">
@@ -1360,7 +1383,7 @@ export default function SignLanguagePage() {
                 </div>
                 <Button
                   variant="outline"
-                  className="h-8 rounded-[10px] text-[12px]"
+                  className="h-9 rounded-[12px] text-[12px]"
                   onClick={() => navigate("/sign-language/history")}
                 >
                   <History className="w-3.5 h-3.5 mr-1.5" />
@@ -1374,8 +1397,8 @@ export default function SignLanguagePage() {
                   onClick={() => handleChangeLiveMode("browser")}
                   className={`rounded-[12px] border px-3 py-3 text-left transition-all ${
                     liveMode === "browser"
-                      ? "border-blue-500 bg-blue-50 shadow-sm"
-                      : "border-gray-200 bg-gray-50"
+                      ? "border-blue-500 bg-blue-500/[0.08] shadow-[0_16px_28px_rgba(37,99,235,0.08)]"
+                      : "border-white/70 bg-white/68 shadow-[0_10px_24px_rgba(15,23,42,0.05)]"
                   }`}
                 >
                   <WifiOff className={`w-4 h-4 mb-2 ${liveMode === "browser" ? "text-blue-600" : "text-gray-500"}`} />
@@ -1389,8 +1412,8 @@ export default function SignLanguagePage() {
                   onClick={() => handleChangeLiveMode("server")}
                   className={`rounded-[12px] border px-3 py-3 text-left transition-all ${
                     liveMode === "server"
-                      ? "border-blue-500 bg-blue-50 shadow-sm"
-                      : "border-gray-200 bg-gray-50"
+                      ? "border-blue-500 bg-blue-500/[0.08] shadow-[0_16px_28px_rgba(37,99,235,0.08)]"
+                      : "border-white/70 bg-white/68 shadow-[0_10px_24px_rgba(15,23,42,0.05)]"
                   }`}
                 >
                   <Server className={`w-4 h-4 mb-2 ${liveMode === "server" ? "text-blue-600" : "text-gray-500"}`} />
@@ -1402,7 +1425,7 @@ export default function SignLanguagePage() {
               </div>
 
               {serviceNotice && (
-                <div className={`mb-3 rounded-[12px] px-3 py-2 text-[12px] ${
+                <div className={`mb-3 rounded-[16px] px-3 py-3 text-[12px] ${
                   liveMode === "server" && wsStatus !== "connected"
                     ? "bg-amber-50 text-amber-700 border border-amber-200"
                     : "bg-slate-50 text-slate-600 border border-slate-200"
@@ -1418,7 +1441,7 @@ export default function SignLanguagePage() {
                 </div>
               )}
 
-              <div className="mb-3 rounded-[14px] border border-blue-100 bg-blue-50/70 p-3">
+              <div className="mb-3 rounded-[20px] border border-blue-100/80 bg-blue-500/[0.06] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[13px] font-semibold text-gray-900">
@@ -1439,15 +1462,15 @@ export default function SignLanguagePage() {
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-3 text-[12px]">
-                  <div className="rounded-[10px] bg-white/80 px-2.5 py-2">
+                  <div className="rounded-[14px] bg-white/80 px-3 py-2.5 shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
                     <p className="text-gray-400">帧尺寸</p>
                     <p className="text-gray-800 font-medium">{protocolPreview.imageSize}</p>
                   </div>
-                  <div className="rounded-[10px] bg-white/80 px-2.5 py-2">
+                  <div className="rounded-[14px] bg-white/80 px-3 py-2.5 shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
                     <p className="text-gray-400">最新帧</p>
                     <p className="text-gray-800 font-medium">{protocolPreview.frameId >= 0 ? protocolPreview.frameId : "--"}</p>
                   </div>
-                  <div className="rounded-[10px] bg-white/80 px-2.5 py-2">
+                  <div className="rounded-[14px] bg-white/80 px-3 py-2.5 shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
                     <p className="text-gray-400">手数</p>
                     <p className="text-gray-800 font-medium">{protocolPreview.handsCount}</p>
                   </div>
@@ -1455,7 +1478,7 @@ export default function SignLanguagePage() {
               </div>
 
               {/* 相机预览 / 图片预览 */}
-              <div className="aspect-video bg-gradient-to-br from-gray-900 to-gray-800 rounded-[14px] mb-3 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
+              <div className="relative mb-3 flex aspect-video flex-col items-center justify-center overflow-hidden rounded-[22px] bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 shadow-[0_20px_50px_rgba(15,23,42,0.18)]">
                 {/* video 元素作为数据源，必须保持非零尺寸以确保浏览器持续解码，但使用 opacity-0 隐藏 */}
                 <video
                   ref={videoRef}
@@ -1518,7 +1541,7 @@ export default function SignLanguagePage() {
                   onClick={() => void handleStartRecognition()}
                   disabled={modelLoading}
                   variant={recognizing ? "destructive" : "default"}
-                  className={`flex-1 h-12 rounded-[14px] text-[15px] font-medium shadow-md active:scale-[0.98] transition-all ${
+                className={`flex-1 h-12 rounded-[16px] text-[15px] font-medium ${
                     !recognizing ? "bg-blue-500 hover:bg-blue-600 text-white" : ""
                   }`}
                 >
@@ -1530,7 +1553,7 @@ export default function SignLanguagePage() {
                   onClick={handleUploadClick}
                   disabled={modelLoading}
                   variant="outline"
-                  className="flex-1 h-12 rounded-[14px] text-[15px] font-medium shadow-sm transition-all bg-white"
+                  className="flex-1 h-12 rounded-[16px] bg-white/80 text-[15px] font-medium"
                 >
                   <ImageIcon className="w-4 h-4 mr-1.5 text-blue-500" />
                   拍照/相册
@@ -1551,13 +1574,13 @@ export default function SignLanguagePage() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-[16px] p-4 shadow-[0_1px_3px_rgb(0,0,0,0.04)]"
+                className="app-panel rounded-[24px] p-5"
               >
                 <h3 className="text-[15px] font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Type className="w-5 h-5 text-green-500" />
                   识别结果
                 </h3>
-                <div className="p-4 bg-green-50 rounded-[12px] mb-3 space-y-2">
+                  <div className="mb-3 space-y-2 rounded-[18px] border border-emerald-100/80 bg-emerald-500/[0.06] p-4">
                   {partialResult && (
                     <p className="text-[13px] italic text-gray-500">
                       partial: {partialResult}
@@ -1596,7 +1619,7 @@ export default function SignLanguagePage() {
             )}
 
             {/* 使用提示 */}
-            <div className="bg-blue-50 rounded-[14px] p-3.5">
+            <div className="rounded-[20px] border border-blue-100/80 bg-blue-500/[0.06] p-4 shadow-[0_12px_28px_rgba(37,99,235,0.06)]">
               <h3 className="text-[14px] font-semibold text-gray-900 mb-2">
                 使用提示
               </h3>
@@ -1622,7 +1645,7 @@ export default function SignLanguagePage() {
 
             {/* 识别历史 */}
             <div>
-              <h3 className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">
+              <h3 className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                 识别历史
               </h3>
               <div className="space-y-2">
@@ -1630,7 +1653,7 @@ export default function SignLanguagePage() {
                   recentHistoryItems.map((item, index) => (
                     <div
                       key={`${item.frameId}-${item.type}-${index}`}
-                      className="bg-white rounded-[14px] p-3.5 shadow-[0_1px_2px_rgb(0,0,0,0.04)]"
+                      className="app-panel rounded-[20px] p-4"
                     >
                       <div className="flex items-center justify-between gap-3 mb-1">
                         <p className="text-[14px] font-medium text-gray-800">
@@ -1646,7 +1669,7 @@ export default function SignLanguagePage() {
                     </div>
                   ))
                 ) : (
-                  <div className="bg-white rounded-[14px] p-4 text-[13px] text-gray-400 shadow-[0_1px_2px_rgb(0,0,0,0.04)]">
+                  <div className="app-panel rounded-[20px] p-4 text-[13px] text-gray-400">
                     当前还没有会话历史，开始识别后会按 `partial / final / sentence_end` 记录。
                   </div>
                 )}
@@ -1654,7 +1677,7 @@ export default function SignLanguagePage() {
             </div>
 
             <div>
-              <h3 className="text-[13px] font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">
+              <h3 className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                 最近会话
               </h3>
               <div className="space-y-2">
@@ -1662,7 +1685,7 @@ export default function SignLanguagePage() {
                   recentSessions.map((session) => (
                     <div
                       key={session.id}
-                      className="bg-white rounded-[14px] p-3.5 shadow-[0_1px_2px_rgb(0,0,0,0.04)]"
+                      className="app-panel rounded-[20px] p-4"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -1693,7 +1716,7 @@ export default function SignLanguagePage() {
                     </div>
                   ))
                 ) : (
-                  <div className="bg-white rounded-[14px] p-4 text-[13px] text-gray-400 shadow-[0_1px_2px_rgb(0,0,0,0.04)]">
+                  <div className="app-panel rounded-[20px] p-4 text-[13px] text-gray-400">
                     当前模式下还没有会话记录。
                   </div>
                 )}
