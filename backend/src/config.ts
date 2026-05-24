@@ -51,6 +51,7 @@ function normalizeDatabaseUrl(value: string | undefined): string | undefined {
     if (isSupabaseTransactionPooler) {
       if (!url.searchParams.has('pgbouncer')) url.searchParams.set('pgbouncer', 'true')
       if (!url.searchParams.has('connection_limit')) url.searchParams.set('connection_limit', '1')
+      if (!url.searchParams.has('sslmode')) url.searchParams.set('sslmode', 'require')
     }
     return url.toString()
   } catch {
@@ -59,6 +60,9 @@ function normalizeDatabaseUrl(value: string | undefined): string | undefined {
 }
 
 const resolvedDatabaseUrl = normalizeDatabaseUrl(decryptIfNeeded() || process.env.DATABASE_URL)
+if (resolvedDatabaseUrl) {
+  process.env.DATABASE_URL = resolvedDatabaseUrl
+}
 
 export const config = {
   port: Number(process.env.PORT) || 3001,

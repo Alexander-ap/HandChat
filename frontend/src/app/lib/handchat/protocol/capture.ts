@@ -8,6 +8,41 @@ export interface SquareCaptureResult {
   crop: FrameCrop;
 }
 
+export function drawVideoFrameToNativeCanvas(params: {
+  video: HTMLVideoElement;
+  canvas: HTMLCanvasElement;
+}): SquareCaptureResult {
+  const { video, canvas } = params;
+  const sourceWidth = video.videoWidth;
+  const sourceHeight = video.videoHeight;
+
+  if (!sourceWidth || !sourceHeight) {
+    throw new Error("视频尺寸不可用，无法采集帧");
+  }
+
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) {
+    throw new Error("无法获取采集画布上下文");
+  }
+
+  canvas.width = sourceWidth;
+  canvas.height = sourceHeight;
+  ctx.clearRect(0, 0, sourceWidth, sourceHeight);
+  ctx.drawImage(video, 0, 0, sourceWidth, sourceHeight);
+
+  return {
+    width: sourceWidth,
+    height: sourceHeight,
+    crop: {
+      x: 0,
+      y: 0,
+      width: sourceWidth,
+      height: sourceHeight,
+    },
+  };
+}
+
 export function drawVideoFrameToSquareCanvas(params: {
   video: HTMLVideoElement;
   canvas: HTMLCanvasElement;
