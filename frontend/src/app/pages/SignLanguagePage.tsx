@@ -28,6 +28,7 @@ import {
   buildKeypointsPayload,
   createSessionDataSource,
   canvasToJpegBase64,
+  drawVideoFrameToNativeCanvas,
   drawVideoFrameToSquareCanvas,
   endBrowserSession,
   getActiveBrowserSessionId,
@@ -61,6 +62,8 @@ interface ProtocolPreviewState {
 }
 
 const PLACEHOLDER_TEXT = "请在摄像头前做出手势...";
+const SERVER_FRAME_INTERVAL_MS = 50;
+const SERVER_JPEG_QUALITY = 0.92;
 
 function buildCommittedText(history: SessionHistoryItem[]) {
   const ordered = [...history].sort((a, b) => {
@@ -675,6 +678,15 @@ export default function SignLanguagePage() {
       captureCanvasRef.current ??= document.createElement("canvas");
       toast("正在加载 AI 模型，请稍候...");
 
+      if (liveMode === "server" && detectorRef.current) {
+        try {
+          detectorRef.current.dispose?.();
+        } catch (_error) {
+          console.warn("释放浏览器本地手势模型失败", _error);
+        }
+        detectorRef.current = null;
+      }
+
       if (liveMode === "browser" && !detectorRef.current) {
         try {
           detectorRef.current = await createHandDetector({ maxHands: 2 });
@@ -838,7 +850,7 @@ export default function SignLanguagePage() {
             }
 
             let hands: any[] = [];
-            if (detectorRef.current) {
+            if (liveMode === "browser" && detectorRef.current) {
               try {
                 hands = await detectorRef.current.estimateHands(videoRef.current, { flipHorizontal: false });
                 consecutiveErrors = 0;
@@ -956,10 +968,15 @@ export default function SignLanguagePage() {
               }
             }
 
-            const capture = drawVideoFrameToSquareCanvas({
-              video: videoRef.current,
-              canvas: captureCanvasRef.current,
-            });
+            const capture = liveMode === "server"
+              ? drawVideoFrameToNativeCanvas({
+                  video: videoRef.current,
+                  canvas: captureCanvasRef.current,
+                })
+              : drawVideoFrameToSquareCanvas({
+                  video: videoRef.current,
+                  canvas: captureCanvasRef.current,
+                });
             const crop = {
               x: capture.crop.x ?? 0,
               y: capture.crop.y ?? 0,
@@ -969,7 +986,10 @@ export default function SignLanguagePage() {
             const frameId = frameIdRef.current++;
             const timestampMs = Date.now();
             const currentSessionId = activeSessionIdRef.current || sessionId;
-            const imageBase64Jpeg = await canvasToJpegBase64(captureCanvasRef.current, 0.85);
+            const imageBase64Jpeg = await canvasToJpegBase64(
+              captureCanvasRef.current,
+              liveMode === "server" ? SERVER_JPEG_QUALITY : 0.85,
+            );
             const framePayload = buildFramePayload({
               sessionId: currentSessionId,
               frameId,
@@ -982,29 +1002,31 @@ export default function SignLanguagePage() {
               devicePixelRatio: window.devicePixelRatio,
               mirror: true,
             });
-            const keypointsPayload = buildKeypointsPayload({
-              sessionId: currentSessionId,
-              frameId,
-              hands: hands.map((hand) => ({
-                handedness: String(hand.handedness).includes("Left") ? "Left" : "Right",
-                score: typeof hand.score === "number" ? hand.score : 1,
-                keypoints: projectLandmarksToFrame({
-                  landmarks: hand.keypoints ?? [],
-                  crop,
-                  outputWidth: capture.width,
-                  outputHeight: capture.height,
-                }),
-                keypoints3D: (hand.keypoints3D ?? []).map((point: { x: number; y: number; z: number }) => ({
-                  x: point.x,
-                  y: point.y,
-                  z: point.z,
-                })),
-              })),
-              imageWidth: capture.width,
-              imageHeight: capture.height,
-            });
+            const keypointsPayload = liveMode === "browser"
+              ? buildKeypointsPayload({
+                  sessionId: currentSessionId,
+                  frameId,
+                  hands: hands.map((hand) => ({
+                    handedness: String(hand.handedness).includes("Left") ? "Left" : "Right",
+                    score: typeof hand.score === "number" ? hand.score : 1,
+                    keypoints: projectLandmarksToFrame({
+                      landmarks: hand.keypoints ?? [],
+                      crop,
+                      outputWidth: capture.width,
+                      outputHeight: capture.height,
+                    }),
+                    keypoints3D: (hand.keypoints3D ?? []).map((point: { x: number; y: number; z: number }) => ({
+                      x: point.x,
+                      y: point.y,
+                      z: point.z,
+                    })),
+                  })),
+                  imageWidth: capture.width,
+                  imageHeight: capture.height,
+                })
+              : null;
 
-            if (liveMode === "server" && timestampMs - lastServerFrameSentAtRef.current >= 100) {
+            if (liveMode === "server" && timestampMs - lastServerFrameSentAtRef.current >= SERVER_FRAME_INTERVAL_MS) {
               lastServerFrameSentAtRef.current = timestampMs;
               wsClientRef.current?.sendFrame(framePayload);
             }
@@ -1012,7 +1034,7 @@ export default function SignLanguagePage() {
             if (frameId % 5 === 0) {
               setProtocolPreview({
                 frameId: framePayload.frame_id,
-                handsCount: keypointsPayload.hands.length,
+                handsCount: keypointsPayload?.hands.length ?? 0,
                 imageSize: `${framePayload.image.width}x${framePayload.image.height}`,
                 jpegBase64Length: framePayload.image.data.length,
               });

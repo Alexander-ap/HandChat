@@ -20,6 +20,10 @@ export interface ServerTranslationStreamOptions {
   noActionLabels?: string[];
 }
 
+function cleanDisplayText(value: string | undefined) {
+  return value?.trim().replace(/^\[(?:AI训练|规则|内置)\]\s*/, '') ?? '';
+}
+
 export class ServerTranslationStream {
   private readonly confidenceThreshold: number;
   private readonly finalConfidenceThreshold: number;
@@ -57,7 +61,6 @@ export class ServerTranslationStream {
     const isActivePrediction = Boolean(
       prediction &&
       label &&
-      prediction.confidence >= this.confidenceThreshold &&
       !this.noActionLabels.has(label)
     );
 
@@ -69,19 +72,20 @@ export class ServerTranslationStream {
     this.lastActivityAt = params.timestampMs;
     this.sentenceClosed = false;
 
+    const partialText = cleanDisplayText(prediction.displayText) || label;
     const shouldEmitPartial =
-      this.lastPartialText !== label ||
+      this.lastPartialText !== partialText ||
       this.lastPartialFrameId < 0 ||
       params.frameId - this.lastPartialFrameId >= this.partialFrameStep;
 
     if (shouldEmitPartial) {
-      this.lastPartialText = label;
+      this.lastPartialText = partialText;
       this.lastPartialFrameId = params.frameId;
       messages.push({
         session_id: params.sessionId,
         frame_id: params.frameId,
         type: 'partial',
-        text: label,
+        text: partialText,
         confidence: prediction.confidence,
         gesture_label: label,
       });

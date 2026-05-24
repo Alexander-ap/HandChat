@@ -151,6 +151,7 @@ CE-CSL 关键协议约束：
 - 优先做最小必要修改，不重构无关代码，不引入过度抽象。
 - 不要用假数据、临时 demo 或硬编码冒充完整实现。
 - 不主动删除文件、清理 Git 索引、修改 Git 历史、推送远程、修改 CI、修改共享环境配置或执行数据库破坏性操作，除非用户明确确认。
+- 创建 PR 前必须明确 base/head 分支；不要默认打到 `main`/`master`。若用户指定目标分支（例如 `frontend-sync-current-code`），必须以该分支为 base，无法直接创建时先说明原因和修正方案，不能自行改打其他分支。
 - 前端改动完成后尽量运行 `npm run build`；涉及 UI 行为时启动前端 dev server 并用浏览器验证。
 - 后端改动完成后至少运行 `npm run build`；涉及接口或 WebSocket 时按影响范围运行 `npm run selfcheck`、`npm run test:integration` 或手动联调。
 - 发现 bug 时先写或补充复现测试，再修复到测试通过；如果当前没有合适测试框架，至少给出可重复的手动复现和验收步骤。
