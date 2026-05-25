@@ -1,8 +1,8 @@
 # HandChat 前端开发文档 — Phase 2.5
 
+> **版本：** v1.4  
 > **编写日期：** 2026-05-18  
-> **版本：** v1.3  
-> **依赖接口文档：** [interfaces.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/interfaces.md)  
+> **依赖接口文档：** [interfaces.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/interfaces.md) (v1.3.1)  
 > **适用阶段：** Phase 2 辅助功能完成后的前端冲刺与稳定性加固
 
 ---

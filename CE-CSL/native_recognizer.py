@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import sys
 import threading
 import urllib.request
 from collections import Counter, deque
@@ -27,12 +28,6 @@ from train_custom import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-CHECKPOINT_DIR = BASE_DIR / "checkpoints"
-MODEL_PATH = CHECKPOINT_DIR / "custom_model.pth"
-VOCAB_PATH = CHECKPOINT_DIR / "custom_vocab.json"
-FALLBACK_MODEL_PATH = BASE_DIR / TRAIN_MODEL_SAVE_PATH
-FALLBACK_VOCAB_PATH = BASE_DIR / TRAIN_VOCAB_SAVE_PATH
-GESTURE_MODEL_PATH = BASE_DIR / "gesture_recognizer.task"
 FEATURES_PER_FRAME = 126
 
 HAND_CONNECTIONS = [
@@ -80,12 +75,52 @@ class WindowPrediction:
     top_k: list[tuple[str, float]]
 
 
+def resolve_asset_path(env_key: str, candidates: list[Path], asset_name: str) -> Path:
+    configured = os.environ.get(env_key)
+    if configured:
+        configured_path = Path(configured).expanduser()
+        if not configured_path.is_absolute():
+            configured_path = (BASE_DIR / configured_path).resolve()
+        if not configured_path.exists():
+            raise RuntimeError(f"{asset_name} file not found: {configured_path}")
+        return configured_path
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    searched = ", ".join(str(candidate) for candidate in candidates)
+    raise RuntimeError(f"{asset_name} file not found. searched: {searched}")
+
+
 def resolve_model_path() -> Path:
-    return MODEL_PATH if MODEL_PATH.exists() else FALLBACK_MODEL_PATH
+    return resolve_asset_path(
+        "CECSL_MODEL_PATH",
+        [
+            BASE_DIR / TRAIN_MODEL_SAVE_PATH,
+        ],
+        "model",
+    )
 
 
 def resolve_vocab_path() -> Path:
-    return VOCAB_PATH if VOCAB_PATH.exists() else FALLBACK_VOCAB_PATH
+    return resolve_asset_path(
+        "CECSL_VOCAB_PATH",
+        [
+            BASE_DIR / TRAIN_VOCAB_SAVE_PATH,
+        ],
+        "vocab",
+    )
+
+
+def resolve_gesture_model_path() -> Path:
+    return resolve_asset_path(
+        "CECSL_GESTURE_MODEL_PATH",
+        [
+            BASE_DIR / "gesture_recognizer.task",
+        ],
+        "gesture model",
+    )
 
 
 def load_vocab() -> list[str]:
@@ -101,11 +136,11 @@ def load_vocab() -> list[str]:
     return vocab
 
 
-def ensure_gesture_model() -> bytes:
-    if not GESTURE_MODEL_PATH.exists():
+def ensure_gesture_model(model_path: Path) -> bytes:
+    if not model_path.exists():
         url = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
-        urllib.request.urlretrieve(url, GESTURE_MODEL_PATH)
-    return GESTURE_MODEL_PATH.read_bytes()
+        urllib.request.urlretrieve(url, model_path)
+    return model_path.read_bytes()
 
 
 def get_result_landmarks(results):
@@ -209,13 +244,16 @@ def parse_display_sign(display_text: str) -> tuple[str, GestureSource]:
 
 class NativeRecognizerEngine:
     def __init__(self) -> None:
+        self.model_path = resolve_model_path()
+        self.vocab_path = resolve_vocab_path()
+        self.gesture_model_path = resolve_gesture_model_path()
         self.vocab = load_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = TinySignModel(num_classes=len(self.vocab)).to(self.device)
-        self.model.load_state_dict(torch.load(resolve_model_path(), map_location=self.device))
+        self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
         self.model.eval()
 
-        base_options = python.BaseOptions(model_asset_buffer=ensure_gesture_model())
+        base_options = python.BaseOptions(model_asset_buffer=ensure_gesture_model(self.gesture_model_path))
         options = vision.GestureRecognizerOptions(
             base_options=base_options,
             num_hands=2,

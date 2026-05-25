@@ -1,7 +1,7 @@
 # HandChat 后端技术规范文档
 
-> **版本：** v2.1  
-> **编写日期：** 2026-05-18  
+> **版本：** v2.2  
+> **编写日期：** 2026-05-18（v2.1） → 2026-05-25（v2.2 清理更新）  
 > **依赖规范：** [interfaces.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/interfaces.md) (v1.3)  
 > **适用人员：** 后端开发工程师  
 > **相关文档：** [phase2-development-plan.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/phase2-development-plan.md) / [frontend-dev-doc.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/frontend-dev-doc.md)

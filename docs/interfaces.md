@@ -1161,6 +1161,7 @@ Client                          Server
 | 2026-05-17 | v1.1 | 4.2 节从 🔲 预留升级为 🔒 冻结：补充 21 个辅助功能接口的完整文档（社区帖子6端点/成就1端点/积分2端点/用户资料5端点/用户统计1端点/关注粉丝5端点），含请求体、响应格式、错误码 |
 | 2026-05-17 | v1.2 | 新增 4.3 节"接口实现状态矩阵"：前后端28个端点逐项标注 ✅/⚠️/❌；新增4个 🔲 预留接口 |
 | 2026-05-18 | v1.3 | 🆕 社区接口返回格式归一化：帖子列表/评论列表增加 `{ posts/comments: [...] }` 包装格式；发帖/评论增加 `{ success, post/comment }` 包装格式；补充 GET /api/posts/:id 帖子详情端点；新增双模式路由说明（Express + Edge Function）；WebSocket 仅 Express 提供的限制说明 |
+| 2026-05-25 | v1.3.1 | 🧹 清理旧模型文件（CE-CSL/checkpoints、CE-CSL/models），模型路径统一为 CE-CSL/custom_model.pth；移除 .pydeps 废弃引用；删除 backend/tests 和 backend/scripts 中的一次性调试脚本 |
 
 ---
 

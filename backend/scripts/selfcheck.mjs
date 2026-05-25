@@ -1,7 +1,12 @@
 import 'dotenv/config';
 import { createRequire } from 'node:module';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '..', '..');
 
 const checks = [];
 let hasFailure = false;
@@ -61,6 +66,50 @@ async function checkRequiredEnv() {
 
   pass('required environment variables');
   return true;
+}
+
+function resolveCeCslAssetPath(envKey, fallbackRelativePath) {
+  const configured = process.env[envKey];
+  if (configured) {
+    return path.isAbsolute(configured)
+      ? configured
+      : path.resolve(repoRoot, configured);
+  }
+
+  return path.resolve(repoRoot, fallbackRelativePath);
+}
+
+async function checkCeCslAssets() {
+  const modelPath = resolveCeCslAssetPath('CECSL_MODEL_PATH', path.join('CE-CSL', 'custom_model.pth'));
+  const vocabPath = resolveCeCslAssetPath('CECSL_VOCAB_PATH', path.join('CE-CSL', 'custom_vocab.json'));
+  const gestureModelPath = resolveCeCslAssetPath('CECSL_GESTURE_MODEL_PATH', path.join('CE-CSL', 'gesture_recognizer.task'));
+
+  const assets = [
+    ['CE-CSL model asset', modelPath],
+    ['CE-CSL vocab asset', vocabPath],
+    ['CE-CSL gesture asset', gestureModelPath],
+  ];
+
+  for (const [name, assetPath] of assets) {
+    try {
+      const stat = await fs.stat(assetPath);
+      pass(name, `${assetPath} (${stat.size} bytes)`);
+    } catch (error) {
+      fail(name, `${assetPath} (${error.message})`);
+    }
+  }
+
+  try {
+    const raw = await fs.readFile(vocabPath, 'utf8');
+    const vocab = JSON.parse(raw);
+    if (!Array.isArray(vocab) || vocab.some((item) => typeof item !== 'string')) {
+      fail('CE-CSL vocab format', 'custom_vocab.json must be a JSON string array');
+      return;
+    }
+    pass('CE-CSL vocab format', `labels=${vocab.join(', ')}`);
+  } catch (error) {
+    fail('CE-CSL vocab format', error.message);
+  }
 }
 
 function checkDatabaseUrl() {
@@ -138,7 +187,10 @@ async function checkCeCslHealth() {
 
     const body = await response.json();
     if (body.status === 'ok' && body.model_loaded) {
-      pass('CE-CSL inference health', `device=${body.device ?? 'unknown'}, vocab=${body.vocab_size ?? 'unknown'}`);
+      pass(
+        'CE-CSL inference health',
+        `device=${body.device ?? 'unknown'}, vocab=${body.vocab_size ?? 'unknown'}, model=${body.model_path ?? 'unknown'}`
+      );
     } else {
       warn('CE-CSL inference health', JSON.stringify(body));
     }
@@ -152,6 +204,7 @@ async function checkCeCslHealth() {
 async function main() {
   const envOk = await checkRequiredEnv();
   const databaseUrl = envOk ? checkDatabaseUrl() : undefined;
+  await checkCeCslAssets();
   await checkPrisma(databaseUrl);
   await checkCeCslHealth();
 

@@ -1,8 +1,8 @@
 # HandChat 第二阶段开发计划
 
-> **版本：** v1.1  
-> **编写日期：** 2026-05-17（v1.0） → 2026-05-18（v1.1 进度更新）  
-> **冻结接口文档：** [interfaces.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/interfaces.md) (v1.3)  
+> **版本：** v1.2  
+> **编写日期：** 2026-05-17（v1.0） → 2026-05-25（v1.2 清理更新）  
+> **冻结接口文档：** [interfaces.md](file:///c:/Users/Lenovo/Desktop/HandChatFinal/HandChatFinal/docs/interfaces.md) (v1.3.1)  
 > **适用范围：** 前端（成员A）、模型（成员B）、后端（成员C）
 
 ---
@@ -441,6 +441,9 @@ model UserAchievement {
 | 2.5.11 CORS 放宽（本机任意端口）+ origin undefined 类型安全 | 后端 | ✅ |
 | 2.5.12 双模式运行支持（VITE_API_BASE_URL + /edge 代理） | 全部 | ✅ |
 | 2.5.13 帖子详情接口补充（GET /api/posts/:id） | 后端 | ✅ |
+| 2.5.14 代码清理：移除旧 CE-CSL checkpoints/models 目录 | 全部 | ✅ 2026-05-25 |
+| 2.5.15 代码清理：移除废弃 .pydeps 引用和一次性调试脚本 | 全部 | ✅ 2026-05-25 |
+| 2.5.16 模型路径统一：native_recognizer 仅读取根目录权重文件 | 全部 | ✅ 2026-05-25 |
 
 #### 🆕 M1.6：Phase 2.6 社区后端全面落地 ✅ (2026-05-19)
 

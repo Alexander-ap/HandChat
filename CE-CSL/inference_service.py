@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import base64
 import binascii
+import sys
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 import cv2
@@ -69,6 +71,10 @@ class HealthResponse(BaseModel):
     vocab_size: int
     device: str
     active_sessions: int
+    model_path: str
+    vocab_path: str
+    gesture_model_path: str
+    labels: list[str]
 
 
 app = FastAPI(title="CE-CSL Inference Service")
@@ -134,6 +140,10 @@ def health() -> HealthResponse:
         vocab_size=len(ENGINE.vocab),
         device=str(ENGINE.device),
         active_sessions=active_sessions,
+        model_path=str(ENGINE.model_path),
+        vocab_path=str(ENGINE.vocab_path),
+        gesture_model_path=str(ENGINE.gesture_model_path),
+        labels=ENGINE.vocab,
     )
 
 

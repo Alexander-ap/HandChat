@@ -17,23 +17,33 @@ LEARNING_RATE = 0.001
 # ----------------- 数据标准化函数 -----------------
 def normalize_data(data_array):
     """
-    将所有坐标点减去手腕的坐标，实现空间位置不变性
+    将所有坐标点减去第一帧有效手腕的坐标，保留手部的相对运动轨迹！
+    （修复了之前每帧都减去当前帧手腕，导致完全丢失运动轨迹的致命 Bug）
     data_array shape: (frames, 126)
     """
     norm_data = np.zeros_like(data_array)
+    ref_lx, ref_ly, ref_lz = None, None, None
+    ref_rx, ref_ry, ref_rz = None, None, None
+    
     for i in range(data_array.shape[0]):
         lx, ly, lz = data_array[i, 0], data_array[i, 1], data_array[i, 2]
         rx, ry, rz = data_array[i, 63], data_array[i, 64], data_array[i, 65]
         
+        # 记录第一帧出现的手腕坐标作为全局锚点
+        if (lx != 0 or ly != 0) and ref_lx is None:
+            ref_lx, ref_ly, ref_lz = lx, ly, lz
+        if (rx != 0 or ry != 0) and ref_rx is None:
+            ref_rx, ref_ry, ref_rz = rx, ry, rz
+            
         for j in range(21):
             if lx != 0 or ly != 0:
-                norm_data[i, j*3]   = data_array[i, j*3] - lx
-                norm_data[i, j*3+1] = data_array[i, j*3+1] - ly
-                norm_data[i, j*3+2] = data_array[i, j*3+2] - lz
+                norm_data[i, j*3]   = data_array[i, j*3] - (ref_lx if ref_lx is not None else 0)
+                norm_data[i, j*3+1] = data_array[i, j*3+1] - (ref_ly if ref_ly is not None else 0)
+                norm_data[i, j*3+2] = data_array[i, j*3+2] - (ref_lz if ref_lz is not None else 0)
             if rx != 0 or ry != 0:
-                norm_data[i, 63+j*3]   = data_array[i, 63+j*3] - rx
-                norm_data[i, 63+j*3+1] = data_array[i, 63+j*3+1] - ry
-                norm_data[i, 63+j*3+2] = data_array[i, 63+j*3+2] - rz
+                norm_data[i, 63+j*3]   = data_array[i, 63+j*3] - (ref_rx if ref_rx is not None else 0)
+                norm_data[i, 63+j*3+1] = data_array[i, 63+j*3+1] - (ref_ry if ref_ry is not None else 0)
+                norm_data[i, 63+j*3+2] = data_array[i, 63+j*3+2] - (ref_rz if ref_rz is not None else 0)
     return norm_data
 
 # ----------------- 1. 数据集定义 -----------------
@@ -81,8 +91,36 @@ class CustomSignDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
+        # 数据增强 (Data Augmentation)：增加随机噪声和轻微缩放
+        # 极大地提高模型在推理时的泛化能力和鲁棒性
+        data = self.samples[idx].copy()
+        
+        # 1. 随机空间缩放 (Scale Jitter)
+        scale = np.random.uniform(0.8, 1.2)
+        data = data * scale
+        
+        # 2. 随机轻微关键点抖动 (Joint Jitter，代替原本破坏结构的平移)
+        # 仅加入非常微小的正态分布噪声，防止过拟合，但不破坏手部结构
+        noise = np.random.normal(0, 0.002, size=data.shape)
+        data += noise
+        # 保证手腕参考点始终为0
+        data[:, 0:3] = 0
+        data[:, 63:66] = 0
+        
+        # 3. 时间轴平移 (Temporal Shift) 
+        # 极大增强模型在实时滑动窗口中的鲁棒性
+        shift_frames = np.random.randint(-3, 4)
+        if shift_frames > 0:
+            # 修复：使用第一帧进行边缘填充，千万不能用 zeros，否则模型会看到塌缩畸形手！
+            pad = np.tile(data[0:1], (shift_frames, 1))
+            data = np.concatenate([pad, data[:-shift_frames]], axis=0)
+        elif shift_frames < 0:
+            # 使用最后一帧进行边缘填充
+            pad = np.tile(data[-1:], (-shift_frames, 1))
+            data = np.concatenate([data[-shift_frames:], pad], axis=0)
+        
         # 转换为 FloatTensor 和 LongTensor
-        x = torch.FloatTensor(self.samples[idx])
+        x = torch.FloatTensor(data)
         y = torch.LongTensor([self.labels[idx]])[0]
         return x, y
 
@@ -90,40 +128,42 @@ class CustomSignDataset(Dataset):
 class TinySignModel(nn.Module):
     def __init__(self, num_classes):
         super(TinySignModel, self).__init__()
-        # 增加网络容量，提取更复杂的特征
+        # 加入 BatchNorm，加速收敛并大幅提升模型预测的置信度
         self.conv1 = nn.Conv1d(in_channels=126, out_channels=128, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm1d(128)
         self.relu = nn.ReLU()
         self.pool = nn.MaxPool1d(2)
         
         self.conv2 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm1d(256)
         
-        # LSTM 层增加维度和层数
-        self.lstm = nn.LSTM(input_size=256, hidden_size=128, num_layers=2, batch_first=True, dropout=0.2)
+        self.lstm = nn.LSTM(input_size=256, hidden_size=128, num_layers=2, batch_first=True, dropout=0.3)
         
-        # 增加 Dropout 防止过拟合
-        self.dropout = nn.Dropout(0.5)
-        self.fc = nn.Linear(128, num_classes)
+        self.dropout = nn.Dropout(0.4)
+        self.fc1 = nn.Linear(128, 64)
+        self.fc2 = nn.Linear(64, num_classes)
 
     def forward(self, x):
         # x shape: (batch, 30, 126)
         x = x.permute(0, 2, 1)  # 转换为 (batch, 126, 30)
         
         x = self.conv1(x)
+        x = self.bn1(x)
         x = self.relu(x)
         x = self.pool(x)
         
         x = self.conv2(x)
+        x = self.bn2(x)
         x = self.relu(x)
         
         x = x.permute(0, 2, 1)  # 转换回 (batch, seq_len, features)
         
         lstm_out, (h_n, c_n) = self.lstm(x)
-        
-        # 取 LSTM 最后一个时间步的输出
         last_out = lstm_out[:, -1, :]
         
         out = self.dropout(last_out)
-        out = self.fc(out)
+        out = self.relu(self.fc1(out))
+        out = self.fc2(out)
         return out
 
 # ----------------- 3. 训练循环 -----------------

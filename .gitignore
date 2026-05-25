@@ -46,6 +46,11 @@ supabase/.temp/
 .dbg/
 .npm-cache/
 
+# CE-CSL local venv & cache
+CE-CSL/.venv/
+CE-CSL/.pydeps/
+CE-CSL/__pycache__/
+
 # Test reports & probe outputs
 backend/integration-report.json
 backend/probe-latest.json
