@@ -20,10 +20,12 @@ import torch
 import torch.nn.functional as F
 
 from train_custom import (
+    AUDIO_FEATURE_DIM,
     FRAMES_PER_SAMPLE,
     MODEL_SAVE_PATH as TRAIN_MODEL_SAVE_PATH,
     VOCAB_SAVE_PATH as TRAIN_VOCAB_SAVE_PATH,
-    TinySignModel,
+    CompactSignModel,
+    compute_semantic_features,
     normalize_data,
 )
 
@@ -249,7 +251,7 @@ class NativeRecognizerEngine:
         self.gesture_model_path = resolve_gesture_model_path()
         self.vocab = load_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = TinySignModel(num_classes=len(self.vocab)).to(self.device)
+        self.model = CompactSignModel(num_classes=len(self.vocab)).to(self.device)
         self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
         self.model.eval()
 
@@ -273,8 +275,10 @@ class NativeRecognizerEngine:
     def predict_window(self, frames: np.ndarray, top_k: int = 3) -> WindowPrediction:
         normalized = normalize_data(frames)
         input_tensor = torch.from_numpy(normalized).float().unsqueeze(0).to(self.device)
+        semantic_tensor = torch.from_numpy(compute_semantic_features(frames)).float().unsqueeze(0).to(self.device)
+        audio_tensor = torch.zeros((1, AUDIO_FEATURE_DIM), dtype=torch.float32, device=self.device)
         with self.lock, torch.no_grad():
-            logits = self.model(input_tensor)
+            logits = self.model(input_tensor, audio_features=audio_tensor, semantic_features=semantic_tensor)
             probs = F.softmax(logits, dim=-1)[0]
             top_count = min(top_k, len(self.vocab))
             top_probs, top_indices = torch.topk(probs, k=top_count)
@@ -342,11 +346,11 @@ class NativeRecognizerSession:
         if len(self.frames_buffer) == FRAMES_PER_SAMPLE:
             prediction = self.engine.predict_window(np.array(self.frames_buffer, dtype=np.float32), top_k=3)
             self.nn_confidence = prediction.confidence
-            self.nn_prediction = prediction.label if self.nn_confidence > 0.8 else "无动作"
+            self.nn_prediction = prediction.label if self.nn_confidence > 0.65 else "无动作"
 
         current_frame_sign = "无"
         current_confidence = 0.0
-        if self.nn_prediction not in ("无动作", "等待输入...") and self.nn_confidence > 0.85:
+        if self.nn_prediction not in ("无动作", "等待输入...") and self.nn_confidence > 0.72:
             current_frame_sign = f"[AI训练] {self.nn_prediction}"
             current_confidence = self.nn_confidence
         elif raw_rule_sign != "无":
