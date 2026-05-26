@@ -6,7 +6,10 @@ import { sendError, unauthorized } from '../http';
 const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  let token = req.headers.authorization?.replace('Bearer ', '');
+  if (req.headers['x-user-jwt']) {
+    token = req.headers['x-user-jwt'] as string;
+  }
   if (!token) return sendError(res, req, 401, 'UNAUTHORIZED', '缺少认证令牌');
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);

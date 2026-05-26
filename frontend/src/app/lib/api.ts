@@ -11,10 +11,10 @@ import { projectId, publicAnonKey } from '/utils/supabase/info';
 import { supabase } from './supabase';
 
 /** API 基础地址 */
-const EDGE_FUNCTION_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-481f4acb`;
+const EDGE_FUNCTION_BASE = `https://${projectId}.supabase.co/functions/v1/api`;
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").trim() || (
   import.meta.env.DEV
-    ? `http://localhost:3001/api`
+    ? `http://localhost:54321/functions/v1/api` // 本地开发时指向本地 Supabase Edge Function
     : EDGE_FUNCTION_BASE
 );
 const EDGE_ONLY_BASE = (import.meta.env.VITE_EDGE_API_BASE_URL || "").trim() || EDGE_FUNCTION_BASE;
@@ -450,7 +450,7 @@ export const userApi = {
       console.warn('[统计] 获取失败，使用默认值');
       return {
         stats: {
-          days: Math.floor((Date.now() - (Date.now() - 7 * 86400000)) / 86400000),
+          days: 1, // 如果获取不到，默认为 1 天而不是 7 天
           points: 0,
           achievements: 0,
           loginStreak: 1,
