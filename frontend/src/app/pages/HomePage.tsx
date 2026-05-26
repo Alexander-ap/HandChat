@@ -459,61 +459,29 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
+    <div className="min-h-screen pb-24" style={{ background: 'var(--md-sys-color-surface)' }}>
       {/* Header */}
-      <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-11 pb-3">
-        <div className="w-full max-w-2xl">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal text-[var(--md-sys-color-on-surface)]">
+      <div className="sticky top-0 z-10 bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] shadow-sm px-4 pt-8 pb-2">
+        <div className="w-full max-w-2xl mx-auto">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-[22px] font-semibold leading-8">
                 {text("视觉辅助", "Vision Assistance")}
               </h1>
-              <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
-                {text("通过相机识别、提取与放大文字内容", "Recognize, extract, and enlarge text through the camera")}
-              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:flex rounded-2xl border border-white/70 bg-white/60 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
-                <div className="pr-3">
-                  <p className="text-[11px] text-slate-400">{text("识别记录", "Records")}</p>
-                  <p className="text-[16px] font-semibold text-slate-900">{historyRecords.length}</p>
-                </div>
-                <div className="border-l border-slate-200/70 pl-3">
-                  <p className="text-[11px] text-slate-400">{text("当前能力", "Capabilities")}</p>
-                  <p className="text-[13px] font-medium text-slate-700">{text("文字识别与智能分析", "OCR + AI")}</p>
-                </div>
-              </div>
-              <div className="hidden md:flex items-center gap-2 rounded-2xl border border-white/70 bg-white/60 px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
-                <div>
-                  <p className="text-[11px] text-slate-400">{text("快速入口", "Quick Access")}</p>
-                  <p className="text-[13px] font-medium text-slate-700">{text("查看识别历史", "View History")}</p>
-                </div>
-              </div>
-              <Button
-                onClick={() => setShowHistory(true)}
-                variant="ghost"
-                size="icon"
-                className="relative h-11 w-11 rounded-2xl bg-white/72 shadow-[0_12px_30px_rgba(15,23,42,0.08)] hover:bg-white"
-              >
-                <History className="w-5 h-5 text-slate-700" />
-                {historyRecords.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-blue-500 text-[10px] font-bold text-white">
-                    {historyRecords.length}
-                  </span>
-                )}
-              </Button>
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {featureHighlights.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-[18px] border border-white/70 bg-white/56 px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl"
-              >
-                <p className="text-[11px] tracking-[0.12em] text-slate-400">{item.label}</p>
-                <p className="mt-1 text-[13px] font-medium leading-5 text-slate-800">{item.value}</p>
-              </div>
-            ))}
+            <Button
+              onClick={() => setShowHistory(true)}
+              variant="ghost"
+              size="icon"
+              className="relative h-10 w-10 shrink-0 rounded-full bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] shadow-none active:scale-95 transition-transform"
+            >
+              <History className="w-5 h-5" />
+              {historyRecords.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-blue-500 text-[10px] font-bold text-white">
+                  {historyRecords.length}
+                </span>
+              )}
+            </Button>
           </div>
         </div>
       </div>
@@ -524,7 +492,7 @@ export default function HomePage() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="app-panel-strong app-grid-glow overflow-hidden rounded-[28px] p-4 flex flex-col items-center"
+            className="overflow-hidden rounded-[28px] p-4 flex flex-col items-center bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)]"
           >
             <div className="relative w-full aspect-video bg-black rounded-[16px] overflow-hidden">
               <video
@@ -578,43 +546,6 @@ export default function HomePage() {
           </motion.div>
         ) : !capturedImage ? (
           <>
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="app-panel-strong app-grid-glow overflow-hidden rounded-[28px] p-5"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="max-w-[70%]">
-                  <p className="text-[12px] font-semibold tracking-[0.16em] text-blue-500">{text("聚焦识别", "FOCUS MODE")}</p>
-                  <h2 className="mt-1 text-[22px] font-bold tracking-[-0.03em] text-slate-900">
-                    {text("更快找到文字，更轻松看清内容", "Find text faster and read content more clearly")}
-                  </h2>
-                  <p className="mt-2 text-[13px] leading-6 text-slate-500">
-                    {text("将实时识别、拍照提取与相册导入整合在一个入口中，让高频使用更直接，也让页面内容更充实。", "Combine live scan, photo capture, and album import in one place for a richer and more direct workflow.")}
-                  </p>
-                </div>
-                <div className="rounded-[22px] border border-white/70 bg-white/70 px-4 py-3 text-right shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
-                  <p className="text-[11px] tracking-[0.12em] text-slate-400">{text("智能提取", "SMART OCR")}</p>
-                  <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-slate-900">{text("文字识别", "OCR")}</p>
-                  <p className="text-[12px] text-slate-500">{text("支持复制与放大", "Supports copy and zoom")}</p>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="rounded-[18px] border border-blue-100/80 bg-blue-500/[0.06] px-3 py-3">
-                  <p className="text-[11px] text-slate-400">{text("推荐方式", "Recommended")}</p>
-                  <p className="mt-1 text-[13px] font-medium text-slate-800">{text("优先拍照识别", "Try photo scan first")}</p>
-                </div>
-                <div className="rounded-[18px] border border-purple-100/80 bg-purple-500/[0.05] px-3 py-3">
-                  <p className="text-[11px] text-slate-400">{text("适用内容", "Suitable For")}</p>
-                  <p className="mt-1 text-[13px] font-medium text-slate-800">{text("长文、海报、屏幕", "Long text, posters, screens")}</p>
-                </div>
-                <div className="rounded-[18px] border border-emerald-100/80 bg-emerald-500/[0.05] px-3 py-3">
-                  <p className="text-[11px] text-slate-400">{text("快捷操作", "Quick Actions")}</p>
-                  <p className="mt-1 text-[13px] font-medium text-slate-800">{text("保存、复制、分享", "Save, copy, share")}</p>
-                </div>
-              </div>
-            </motion.div>
-
             {/* 功能按钮 */}
             <div className="grid grid-cols-3 gap-3">
               {actionCards.map((card) => {
@@ -623,16 +554,15 @@ export default function HomePage() {
                   <motion.button
                     key={card.key}
                     whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={card.onClick}
-                    className="app-panel app-grid-glow rounded-[24px] p-4 text-left transition-all hover:-translate-y-1"
+                    className="flex flex-col items-center justify-center rounded-[24px] bg-[var(--md-sys-color-surface-container-low)] p-5 text-center transition-colors hover:bg-[var(--md-sys-color-surface-container)] active:bg-[var(--md-sys-color-surface-container-high)] border border-[var(--md-sys-color-outline-variant)]"
                   >
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-[16px] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ${card.accentClass}`}>
-                      <Icon className="w-5 h-5" />
+                    <div className={`mb-3 flex h-14 w-14 items-center justify-center rounded-[18px] ${card.accentClass}`}>
+                      <Icon className="h-6 w-6" />
                     </div>
-                    <div className="mt-4">
-                      <p className="text-[14px] font-semibold text-slate-900">{card.title}</p>
-                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{card.description}</p>
+                    <div>
+                      <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">{card.title}</p>
                     </div>
                   </motion.button>
                 );
@@ -656,54 +586,11 @@ export default function HomePage() {
               className="hidden"
             />
 
-            {/* 使用说明 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="app-panel rounded-[24px] p-5"
-            >
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-blue-500/[0.08]">
-                  <ScanText className="w-3.5 h-3.5 text-blue-500" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="mb-1 text-[15px] font-semibold text-slate-900">{text("使用说明", "How It Works")}</h3>
-                      <p className="text-[12px] text-slate-500">{text("更适合高频操作的紧凑型识别工作区", "A compact recognition workspace designed for frequent use")}</p>
-                    </div>
-                    <div className="rounded-full bg-blue-500/[0.08] px-3 py-1 text-[11px] font-medium text-blue-600">
-                      {text("4 步完成识别", "4 steps")}
-                    </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
-                      <p className="text-[12px] font-medium text-slate-900">{text("1. 导入图片", "1. Import an image")}</p>
-                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{text("拍照或从相册选择包含文字的图片", "Take a photo or choose an image that contains text")}</p>
-                    </div>
-                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
-                      <p className="text-[12px] font-medium text-slate-900">{text("2. 自动提取", "2. Extract automatically")}</p>
-                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{text("系统自动识别并提取清晰的文字内容", "The app recognizes and extracts clear text automatically")}</p>
-                    </div>
-                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
-                      <p className="text-[12px] font-medium text-slate-900">{text("3. 快速处理", "3. Process quickly")}</p>
-                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{text("支持文字放大、复制与分享操作", "Zoom, copy, and share the extracted result")}</p>
-                    </div>
-                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
-                      <p className="text-[12px] font-medium text-slate-900">{text("4. 场景覆盖", "4. Flexible scenes")}</p>
-                      <p className="mt-1 text-[12px] leading-5 text-slate-500">{text("适用于书籍、海报、屏幕等内容读取", "Works well for books, posters, and screens")}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
             {/* 快速访问历史 */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
+              transition={{ delay: 0.1 }}
             >
               <div className="mb-2.5 flex items-center justify-between px-1">
                 <div>
@@ -724,7 +611,7 @@ export default function HomePage() {
                       key={record.id}
                       whileTap={{ scale: 0.99 }}
                       onClick={() => setSelectedHistory(record)}
-                      className="app-panel rounded-[20px] p-3.5 flex items-center gap-3 cursor-pointer transition-all hover:-translate-y-0.5"
+                      className="rounded-[20px] bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)] p-3.5 flex items-center gap-3 cursor-pointer transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
                     >
                       <img
                         src={record.image}
@@ -747,38 +634,14 @@ export default function HomePage() {
                   ))}
                 </div>
               ) : (
-                <div className="app-panel-strong app-grid-glow overflow-hidden rounded-[24px] p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-blue-500/[0.08] text-blue-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-                        <History className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h3 className="text-[15px] font-semibold text-slate-900">{text("还没有识别记录", "No records yet")}</h3>
-                        <p className="mt-1 max-w-md text-[12px] leading-6 text-slate-500">
-                          {text("完成一次拍照识别、实时识别或相册导入后，结果会自动沉淀到这里，方便你快速回看与继续处理。", "After your first scan, results will appear here so you can revisit and continue processing them quickly.")}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex min-w-[132px] flex-col items-center justify-center rounded-[18px] border border-white/70 bg-white/72 px-3 py-2 text-center shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-                      <p className="text-[11px] text-slate-400">{text("当前状态", "Status")}</p>
-                      <p className="mt-1 text-[14px] font-semibold text-slate-800">{text("等待首次识别", "Waiting for your first scan")}</p>
-                    </div>
+                <div className="flex flex-col items-center justify-center rounded-[24px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] py-12 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] mb-3">
+                    <History className="h-6 w-6" />
                   </div>
-                  <div className="mt-4 grid grid-cols-3 gap-3">
-                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
-                      <p className="text-[11px] text-slate-400">{text("推荐", "Recommended")}</p>
-                      <p className="mt-1 text-[13px] font-medium text-slate-800">{text("先试拍照识别", "Start with photo scan")}</p>
-                    </div>
-                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
-                      <p className="text-[11px] text-slate-400">优势</p>
-                      <p className="mt-1 text-[13px] font-medium text-slate-800">结果更稳定清晰</p>
-                    </div>
-                    <div className="rounded-[18px] border border-white/70 bg-white/72 p-3">
-                      <p className="text-[11px] text-slate-400">后续</p>
-                      <p className="mt-1 text-[13px] font-medium text-slate-800">支持复制与分享</p>
-                    </div>
-                  </div>
+                  <h3 className="text-[15px] font-medium text-[var(--md-sys-color-on-surface)]">{text("还没有识别记录", "No records yet")}</h3>
+                  <p className="mt-1 max-w-xs text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+                    {text("您的识别历史将在这里显示", "Your scan history will appear here")}
+                  </p>
                 </div>
               )}
             </motion.div>
@@ -789,7 +652,7 @@ export default function HomePage() {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="app-panel-strong rounded-[30px] overflow-hidden"
+              className="rounded-[30px] overflow-hidden border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
             >
               <img
                 src={capturedImage}
@@ -802,7 +665,7 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="app-panel-strong rounded-[30px] p-8"
+              className="rounded-[30px] p-8 border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] mt-4"
             >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">

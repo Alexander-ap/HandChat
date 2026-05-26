@@ -1098,28 +1098,25 @@ export default function SignLanguagePage() {
   return (
     <div
       className="min-h-screen pb-24"
-      style={{ background: "var(--app-background, #F2F2F7)" }}
+      style={{ background: "var(--md-sys-color-surface)" }}
     >
       {/* Header */}
-      <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-11 pb-3">
-        <div className="w-full max-w-2xl flex items-start justify-between gap-3">
+      <div className="app-topbar sticky top-0 z-10 flex justify-center px-4 pt-8 pb-2 bg-[var(--md-sys-color-surface)] shadow-sm">
+        <div className="w-full max-w-2xl flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal text-[var(--md-sys-color-on-surface)]">
+            <h1 className="text-[22px] font-semibold leading-8 text-[var(--md-sys-color-on-surface)]">
               {text("手语交互", "Sign Interaction")}
             </h1>
-            <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
-              {text("手语与文字的双向转换", "Two-way conversion between sign language and text")}
-            </p>
           </div>
           <button
             onClick={() => setShowLibraryManager(true)}
-            className="relative flex items-center gap-1.5 rounded-full border border-white/70 bg-white/76 px-3.5 py-2 shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition-colors hover:bg-white"
+            className="relative flex items-center gap-1.5 rounded-full bg-[var(--md-sys-color-secondary-container)] px-3.5 py-2 transition-colors active:scale-95"
           >
-            <Settings2 className="w-4 h-4 text-gray-600" />
-            <span className="text-[12px] font-medium text-gray-600">{text("图库", "Library")}</span>
+            <Settings2 className="w-4 h-4 text-[var(--md-sys-color-on-secondary-container)]" />
+            <span className="text-[12px] font-medium text-[var(--md-sys-color-on-secondary-container)]">{text("图库", "Library")}</span>
             <span className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1 border-2 border-white ${
               uploadedCount === SIGN_WORDS.length
-                ? "bg-green-500 text-white"
+                ? "bg-[var(--md-sys-color-primary)] text-white"
                 : "bg-orange-500 text-white"
             }`}>
               {uploadedCount}

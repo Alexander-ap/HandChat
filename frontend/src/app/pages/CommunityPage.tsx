@@ -454,23 +454,20 @@ export default function CommunityPage() {
     <div className="min-h-screen pb-24 bg-[var(--md-sys-color-background)]">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         {/* 头部 TopAppBar MD3 Style */}
-        <div className="sticky top-0 z-10 bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] shadow-[var(--md-sys-elevation-level1)] px-4 pt-11 pb-3">
+        <div className="sticky top-0 z-10 bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] shadow-sm px-4 pt-8 pb-2">
           <div className="w-full max-w-2xl mx-auto">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal">
+                <h1 className="text-[22px] font-semibold leading-8">
                   {text("社区", "Community")}
                 </h1>
-                <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
-                  {text("浏览动态、交流经验、发布分享", "Browse posts, connect, and share updates")}
-                </p>
               </div>
               <Button
                 onClick={() => setShowNewPost(true)}
-                className="h-10 shrink-0 rounded-full px-4 bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] hover:bg-[var(--md-sys-color-primary-container)]/90 shadow-none"
+                className="h-10 shrink-0 rounded-full px-4 bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] hover:bg-[var(--md-sys-color-primary-container)]/90 shadow-none active:scale-95 transition-transform"
               >
                 <Plus className="mr-1.5 h-4 w-4" />
-                <span className="text-[var(--md-sys-typescale-label-large-size)] font-medium">{text("发帖", "Post")}</span>
+                <span className="text-[14px] font-medium">{text("发帖", "Post")}</span>
               </Button>
             </div>
             <TabsList className="flex h-11 w-full justify-start gap-1 rounded-full bg-[var(--md-sys-color-surface-container-low)] p-1">

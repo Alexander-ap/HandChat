@@ -568,27 +568,24 @@ export default function SoundDetectionPage() {
   };
 
   return (
-    <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
+    <div className="min-h-screen pb-24" style={{ background: 'var(--md-sys-color-surface)' }}>
       {/* Header */}
-      <div className="app-topbar sticky top-0 z-50 flex items-center justify-center px-4 pt-11 pb-3">
+      <div className="app-topbar sticky top-0 z-50 flex items-center justify-center px-4 pt-8 pb-2 bg-[var(--md-sys-color-surface)] shadow-sm">
         <div className="w-full max-w-2xl flex items-center">
           <div>
-            <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal text-[var(--md-sys-color-on-surface)]">
+            <h1 className="text-[22px] font-semibold leading-8 text-[var(--md-sys-color-on-surface)]">
               {text("环境音感知", "Sound Awareness")}
             </h1>
-            <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
-              {text("实时监听环境声音并进行智能提醒", "Listen to surrounding sounds in real time and provide smart alerts")}
-            </p>
           </div>
         </div>
       </div>
 
-      <div className="w-full max-w-2xl mx-auto space-y-4 px-4 pt-4">
+      <div className="w-full max-w-2xl mx-auto space-y-4 px-4 pt-2">
         {/* 主监听卡片 */}
-        <div className="app-panel-strong app-grid-glow overflow-hidden rounded-[28px] p-5 text-slate-900">
+        <div className="bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden rounded-2xl p-5 text-slate-900">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="mb-1 text-[22px] font-bold tracking-[-0.03em] text-slate-900">{text("环境音监听", "Sound Monitoring")}</h2>
+              <h2 className="mb-1 text-[20px] font-semibold tracking-tight text-[var(--md-sys-color-on-surface)]">{text("环境音监听", "Sound Monitoring")}</h2>
               <p className="text-[13px] text-slate-500">
                 {isMonitoring 
                   ? (isDemoMode ? text("模拟体验模式运行中...", "Demo mode is running...") : (isAnalyzing ? text("正在分析声音...", "Analyzing sound...") : text("正在实时监听...", "Listening in real time..."))) 

@@ -85,9 +85,9 @@ export default function ProfilePage() {
 
       if (statsData?.stats) {
         setStats({
-          days: statsData.stats.days || 0,
+          days: Math.max(1, statsData.stats.days || 1), // 至少显示 1 天
           points: statsData.stats.points || 0,
-          achievements: statsData.stats.achievementCount || statsData.stats.achievements || 0,
+          achievements: Math.max(1, statsData.stats.achievementCount || statsData.stats.achievements || 0), // 至少包含一个默认成就
           postCount: statsData.stats.postCount || 0,
           followingCount: statsData.stats.followingCount || 0,
           followerCount: statsData.stats.followerCount || 0,
@@ -221,40 +221,37 @@ export default function ProfilePage() {
   if (!userProfile) return null;
 
   return (
-    <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
+    <div className="min-h-screen pb-24" style={{ background: 'var(--md-sys-color-surface)' }}>
       {/* 头部 */}
-      <div className="app-topbar sticky top-0 z-50 flex flex-col items-center justify-end px-4 pt-11 pb-3">
+      <div className="app-topbar sticky top-0 z-50 flex flex-col items-center justify-end px-4 pt-8 pb-2 bg-[var(--md-sys-color-surface)]">
         <div className="w-full max-w-2xl">
-          <h1 className="text-[var(--md-sys-typescale-title-large-size)] font-medium leading-8 tracking-normal text-[var(--md-sys-color-on-surface)]">
+          <h1 className="text-[22px] font-semibold leading-8 text-[var(--md-sys-color-on-surface)]">
             {text("个人中心", "Profile")}
           </h1>
-          <p className="mt-1 text-[12px] leading-4 text-[var(--md-sys-color-on-surface-variant)]">
-            {text("管理资料、偏好与账户设置", "Manage your profile, preferences, and account settings")}
-          </p>
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl space-y-4 px-4 pt-4">
+      <div className="mx-auto w-full max-w-2xl space-y-4 px-4 pt-2">
         {/* 用户卡片 */}
         <div 
           onClick={() => navigate("/profile/edit")}
-          className="app-panel app-grid-glow flex cursor-pointer items-center gap-4 rounded-[24px] p-4 transition-colors"
+          className="bg-[var(--md-sys-color-surface-container-low)] flex cursor-pointer items-center gap-4 rounded-2xl p-4 transition-colors active:bg-black/5"
         >
-          <Avatar className="h-16 w-16 border border-white/70 shadow-[0_16px_32px_rgba(15,23,42,0.08)]">
+          <Avatar className="h-14 w-14 border border-[var(--md-sys-color-outline-variant)]">
             <AvatarImage src={userProfile.avatarUrl} className="object-cover" />
-            <AvatarFallback className="bg-gradient-to-br from-blue-100 via-indigo-50 to-white text-[18px] font-medium text-blue-600">
+            <AvatarFallback className="bg-[var(--md-sys-color-primary-container)] text-[18px] font-medium text-[var(--md-sys-color-on-primary-container)]">
               {userProfile.name.charAt(0)}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <h2 className="truncate text-[20px] font-semibold tracking-[-0.02em] text-slate-900">{userProfile.name}</h2>
-            <p className="truncate text-[14px] text-slate-500">{text("编号", "ID")}: {userProfile.id}</p>
+            <h2 className="truncate text-[18px] font-medium text-[var(--md-sys-color-on-surface)]">{userProfile.name}</h2>
+            <p className="truncate text-[13px] text-[var(--md-sys-color-on-surface-variant)]">{text("编号", "ID")}: {userProfile.id}</p>
           </div>
-          <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-300" />
+          <ChevronRight className="h-5 w-5 flex-shrink-0 text-[var(--md-sys-color-on-surface-variant)]" />
         </div>
 
         {/* 统计 */}
-        <div className="app-panel grid grid-cols-3 overflow-hidden rounded-[24px] py-2">
+        <div className="bg-[var(--md-sys-color-surface-container-low)] grid grid-cols-3 overflow-hidden rounded-2xl py-2">
           {userStats.map(stat => {
             const Icon = stat.icon;
             const handleClick = () => {
@@ -269,13 +266,13 @@ export default function ProfilePage() {
             return (
               <div 
                 key={stat.label} 
-                className="flex flex-col items-center justify-center gap-1 py-3 transition-colors hover:bg-white/45"
+                className="flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-black/5"
                 onClick={handleClick}
               >
-                <span className="text-[20px] font-bold tracking-[-0.03em] text-slate-900">{stat.value}</span>
-                <div className="flex items-center gap-1 text-slate-500">
+                <span className="text-[18px] font-semibold text-[var(--md-sys-color-on-surface)]">{stat.value}</span>
+                <div className="flex items-center gap-1 text-[var(--md-sys-color-on-surface-variant)]">
                   <Icon className="h-3.5 w-3.5" />
-                  <span className="text-[12px] font-medium">{stat.label}</span>
+                  <span className="text-[12px]">{stat.label}</span>
                 </div>
               </div>
             );
@@ -285,10 +282,10 @@ export default function ProfilePage() {
         {/* 设置组 */}
         {settingsGroups.map((group, groupIndex) => (
           <div key={groupIndex}>
-            <h3 className="mb-2 ml-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <h3 className="mb-2 ml-1 text-[13px] font-medium text-[var(--md-sys-color-primary)]">
               {group.title}
             </h3>
-            <div className="app-panel overflow-hidden rounded-[24px]">
+            <div className="bg-[var(--md-sys-color-surface-container-low)] overflow-hidden rounded-2xl">
               {group.items.map((item, itemIndex) => {
                 const Icon = item.icon;
                 const isLast = itemIndex === group.items.length - 1;
@@ -298,29 +295,29 @@ export default function ProfilePage() {
                   <Wrapper
                     key={itemIndex}
                     onClick={item.hasSwitch ? undefined : item.action}
-                    className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${
-                      !item.hasSwitch ? 'cursor-pointer hover:bg-white/40 active:bg-white/55' : ''
+                    className={`w-full flex items-center justify-between px-4 py-3.5 transition-colors ${
+                      !item.hasSwitch ? 'cursor-pointer active:bg-black/5' : ''
                     }`}
-                    style={!isLast ? { borderBottom: '1px solid rgba(148,163,184,0.10)' } : {}}
+                    style={!isLast ? { borderBottom: '1px solid var(--md-sys-color-surface-container-high)' } : {}}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`h-9 w-9 ${item.bg} rounded-[12px] flex items-center justify-center flex-shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]`}>
-                        <Icon className={`w-3.5 h-3.5 ${item.color}`} />
+                      <div className={`h-8 w-8 ${item.bg} rounded-full flex items-center justify-center flex-shrink-0`}>
+                        <Icon className={`w-4 h-4 ${item.color}`} />
                       </div>
-                      <span className="text-[15px] text-slate-900">{item.label}</span>
+                      <span className="text-[15px] text-[var(--md-sys-color-on-surface)]">{item.label}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       {item.badge && (
-                        <span className="rounded-full bg-white/75 px-2.5 py-1 text-[12px] text-slate-500 shadow-[0_6px_18px_rgba(15,23,42,0.05)]">{item.badge}</span>
+                        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">{item.badge}</span>
                       )}
                       {item.hasSwitch ? (
                         <Switch
                           checked={item.switchValue}
                           onCheckedChange={item.onSwitchChange}
-                          className="data-[state=checked]:bg-[#34C759] scale-90"
+                          className="data-[state=checked]:bg-[var(--md-sys-color-primary)] scale-90"
                         />
                       ) : (
-                        <ChevronRight className="w-4 h-4 text-gray-300" />
+                        <ChevronRight className="w-4 h-4 text-[var(--md-sys-color-on-surface-variant)] opacity-50" />
                       )}
                     </div>
                   </Wrapper>
@@ -331,17 +328,16 @@ export default function ProfilePage() {
         ))}
 
         {/* 退出登录 */}
-        <div className="pt-1 pb-6">
+        <div className="pt-2 pb-6">
           <Button
             onClick={handleLogout}
             variant="ghost"
-            className="app-panel w-full h-12 rounded-[20px] text-[15px] font-medium text-[#FF3B30] hover:bg-white/85"
+            className="w-full h-12 rounded-2xl text-[15px] font-medium text-[var(--md-sys-color-error)] bg-[var(--md-sys-color-error-container)]/30 hover:bg-[var(--md-sys-color-error-container)]/50 active:scale-95 transition-all"
           >
             {text("退出登录", "Sign Out")}
           </Button>
           <div className="text-center space-y-1 mt-6">
-            <p className="text-[12px] text-gray-400 font-medium">{text("无障碍助手 v2.0.0", "HandChat v2.0.0")}</p>
-            <p className="text-[11px] text-gray-400/80">{text("© 2026 无障碍团队", "© 2026 HandChat Team")}</p>
+            <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)] font-medium">{text("无障碍助手 v2.0.0", "HandChat v2.0.0")}</p>
           </div>
         </div>
       </div>

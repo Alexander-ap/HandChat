@@ -20,10 +20,10 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--md-sys-color-surface-container)] border-t border-[var(--md-sys-color-outline-variant)] shadow-[var(--md-sys-elevation-level2)]"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--md-sys-color-surface-container)]"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0px)" }}
     >
-      <div className="mx-auto max-w-lg h-[80px] px-2 flex items-center justify-around">
+      <div className="mx-auto max-w-lg h-[64px] px-2 flex items-center justify-around">
         {navItems.map((item) => {
           const isActive = item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path);
           const Icon = item.icon;
@@ -32,10 +32,10 @@ export default function BottomNav() {
               key={item.path}
               to={item.path}
               onClick={handleTap}
-              className={`flex min-w-[64px] flex-col items-center justify-center gap-1 py-2 transition-all duration-200 active:scale-95`}
+              className="flex min-w-[64px] flex-col items-center justify-center gap-1 py-1 transition-all duration-200 active:scale-95 tap-highlight-transparent"
             >
               <div 
-                className={`relative px-5 py-1 rounded-full transition-colors duration-200 flex items-center justify-center ${
+                className={`relative px-4 py-1 rounded-full transition-colors duration-200 flex items-center justify-center ${
                   isActive ? "bg-[var(--md-sys-color-secondary-container)]" : "bg-transparent"
                 }`}
               >
@@ -47,9 +47,9 @@ export default function BottomNav() {
                 />
               </div>
               <span 
-                className={`text-[12px] tracking-[0.04em] transition-colors duration-200 ${
+                className={`text-[12px] tracking-[0.02em] transition-colors duration-200 ${
                   isActive 
-                    ? "font-bold text-[var(--md-sys-color-on-surface)]" 
+                    ? "font-semibold text-[var(--md-sys-color-on-surface)]" 
                     : "font-medium text-[var(--md-sys-color-on-surface-variant)]"
                 }`}
               >
