@@ -5,7 +5,7 @@
  * 从后端实时获取用户统计数据
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useOutletContext } from "react-router";
 import {
   User, Settings, Bell, Shield, HelpCircle, FileText, ChevronRight,
@@ -20,6 +20,7 @@ import ThemeSelector from "../components/ThemeSelector";
 import LanguageSelector from "../components/LanguageSelector";
 import { supabase } from "../lib/supabase";
 import { userApi } from "../lib/api";
+import { PROFILE_STATS_REFRESH_EVENT } from "../lib/profileEvents";
 import { useLanguage } from "../contexts/LanguageContext";
 
 interface UserProfileState {
@@ -38,87 +39,111 @@ export default function ProfilePage() {
   const [vibration, setVibration] = useState(savedState.vibration !== undefined ? savedState.vibration : true);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfileState | null>(null);
-  const [stats, setStats] = useState({ days: 0, points: 0, achievements: 0, postCount: 0, followingCount: 0, followerCount: 0 });
+  const [userProfile, setUserProfile] = useState<UserProfileState | null>(savedState.userProfile || null);
+  const [stats, setStats] = useState(savedState.stats || { days: 0, points: 0, achievements: 0, postCount: 0, followingCount: 0, followerCount: 0 });
   const { text, language } = useLanguage();
+
+  const fetchData = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        navigate("/login");
+        return;
+      }
+
+      const meta = session.user.user_metadata || {};
+      const fallbackProfile: UserProfileState = {
+        name: meta.name || text("用户", "User"),
+        email: session.user.email || '',
+        id: session.user.id.substring(0, 8).toUpperCase(),
+        avatarUrl: meta.avatar_url || '',
+      };
+
+      setUserProfile(fallbackProfile);
+
+      const [profileData, statsData, settingsData] = await Promise.all([
+        userApi.getProfile().catch((e: any) => {
+          console.warn("[个人中心] 获取资料失败:", e.message || e);
+          return null;
+        }),
+        userApi.getStats().catch((e: any) => {
+          console.warn("[个人中心] 获取统计失败:", e.message || e);
+          return null;
+        }),
+        userApi.getSettings().catch((e: any) => {
+          console.warn("[个人中心] 获取设置失败:", e.message || e);
+          return null;
+        }),
+      ]);
+
+      const nextProfile = {
+        ...fallbackProfile,
+        name: profileData?.nickname || fallbackProfile.name,
+        avatarUrl: profileData?.avatar || fallbackProfile.avatarUrl,
+      };
+      setUserProfile(nextProfile);
+
+      if (statsData?.stats) {
+        setStats({
+          days: statsData.stats.days || 0,
+          points: statsData.stats.points || 0,
+          achievements: statsData.stats.achievementCount || statsData.stats.achievements || 0,
+          postCount: statsData.stats.postCount || 0,
+          followingCount: statsData.stats.followingCount || 0,
+          followerCount: statsData.stats.followerCount || 0,
+        });
+      }
+
+      if (settingsData) {
+        setNotifications(Boolean(settingsData.notification));
+        setVibration(Boolean(settingsData.vibration));
+      }
+    } catch (error: any) {
+      console.error("[个人中心] 获取会话失败:", error);
+      setUserProfile({ name: text("用户", "User"), email: '', id: '--------', avatarUrl: '' });
+    }
+  }, [navigate, text]);
 
   /** 获取用户信息和统计数据 */
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
-          navigate("/login");
-          return;
-        }
-
-        const meta = session.user.user_metadata || {};
-        const fallbackProfile: UserProfileState = {
-          name: meta.name || text("用户", "User"),
-          email: session.user.email || '',
-          id: session.user.id.substring(0, 8).toUpperCase(),
-          avatarUrl: meta.avatar_url || '',
-        };
-
-        setUserProfile(fallbackProfile);
-
-        const [profileData, statsData, settingsData] = await Promise.all([
-          userApi.getProfile().catch((e: any) => {
-            console.warn("[个人中心] 获取资料失败:", e.message || e);
-            return null;
-          }),
-          userApi.getStats().catch((e: any) => {
-            console.warn("[个人中心] 获取统计失败:", e.message || e);
-            return null;
-          }),
-          userApi.getSettings().catch((e: any) => {
-            console.warn("[个人中心] 获取设置失败:", e.message || e);
-            return null;
-          }),
-        ]);
-
-        setUserProfile({
-          ...fallbackProfile,
-          name: profileData?.nickname || fallbackProfile.name,
-          avatarUrl: profileData?.avatar || fallbackProfile.avatarUrl,
-        });
-
-        if (statsData?.stats) {
-          setStats({
-            days: statsData.stats.days || 0,
-            points: statsData.stats.points || 0,
-            achievements: statsData.stats.achievementCount || statsData.stats.achievements || 0,
-            postCount: statsData.stats.postCount || 0,
-            followingCount: statsData.stats.followingCount || 0,
-            followerCount: statsData.stats.followerCount || 0,
-          });
-        }
-
-        if (settingsData) {
-          setNotifications(Boolean(settingsData.notification));
-          setVibration(Boolean(settingsData.vibration));
-        }
-      } catch (error: any) {
-        console.error("[个人中心] 获取会话失败:", error);
-        // 网络错误时不转登录，显示离线状态
-        setUserProfile({ name: text("用户", "User"), email: '', id: '--------', avatarUrl: '' });
-      }
-    };
     fetchData();
 
-    // 监听用户数据变化 (从编辑页面返回时)
+    const handleProfileStatsRefresh = (event: Event) => {
+      const customEvent = event as CustomEvent<{ postCount?: number }>;
+      const delta = customEvent.detail?.postCount || 0;
+      if (delta) {
+        setStats((prev) => ({ ...prev, postCount: Math.max(0, (prev.postCount || 0) + delta) }));
+      }
+      void fetchData();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchData();
+      }
+    };
+
+    window.addEventListener(PROFILE_STATS_REFRESH_EVENT, handleProfileStatsRefresh as EventListener);
+    window.addEventListener("focus", handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'USER_UPDATED') {
+      if (event === 'USER_UPDATED' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         void fetchData();
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [navigate, text]);
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener(PROFILE_STATS_REFRESH_EVENT, handleProfileStatsRefresh as EventListener);
+      window.removeEventListener("focus", handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchData]);
 
   useEffect(() => {
-    setPageState('profile', { notifications, vibration });
-  }, [notifications, vibration, setPageState]);
+    setPageState('profile', { notifications, vibration, userProfile, stats });
+  }, [notifications, vibration, userProfile, stats, setPageState]);
 
   const handleNotificationsChange = async (checked: boolean) => {
     const previous = notifications;

@@ -137,11 +137,7 @@ export default function CommunityPage() {
   };
 
   const ensureCommunitySession = async () => {
-    let session = (await supabase.auth.getSession()).data.session;
-    if (!session?.access_token) {
-      const refreshed = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
-      session = refreshed.data.session;
-    }
+    const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
       throw new Error(text("请先登录后再操作", "Please sign in to continue"));
     }
