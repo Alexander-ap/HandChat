@@ -1,0 +1,11 @@
+{
+  "appId": "com.handchat.app",
+  "appName": "HandChat",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
