@@ -1,5 +1,51 @@
 # HandChat 全项目接口文档
 
+> 当前实现补充：2026-06-30
+> 当前真实迭代分支：`feat/frontend-sync-current-code`
+> 本文后续章节包含历史 Phase 2/2.5 约定；如与本补充冲突，以本补充和当前代码为准。
+
+## 0. 当前实现补充
+
+### 0.1 认证错误语义
+
+| 状态码 | code | 含义 | 前端处理 |
+| --- | --- | --- | --- |
+| `401` | `UNAUTHORIZED` | 缺少 token、token 无效或 token 过期 | 引导重新登录 |
+| `503` | `AUTH_SERVICE_UNAVAILABLE` | Supabase Auth 网络失败、超时或临时不可用 | 提示稍后重试，不要强制登出 |
+
+后端认证中间件已经加入 Supabase Auth 超时、重试和 token 缓存。网络失败不再伪装为 `401`。
+
+### 0.2 当前新增/修正端点
+
+| 方法 | 路径 | 认证 | 说明 |
+| --- | --- | --- | --- |
+| `GET` | `/api/user/posts` | 必须 | 当前用户已发布帖子管理列表 |
+| `GET` | `/api/user/comments` | 必须 | 当前用户已发布评论管理列表 |
+| `DELETE` | `/api/posts/:id/comments/:commentId` | 必须 | 删除当前用户自己的评论 |
+| `GET` | `/api/user/following/status?ids=a,b` | 必须 | 批量查询当前用户是否关注多个作者 |
+
+### 0.3 当前前端路由
+
+| 路由 | 说明 |
+| --- | --- |
+| `/profile/posts` | 我的帖子管理，支持查看、转发、删除 |
+| `/profile/comments` | 我的评论管理，支持定位到帖子评论位置、删除 |
+| `/community/post/:postId#comment-:commentId` | 帖子详情并滚动定位评论 |
+
+### 0.4 成就同步
+
+`GET /api/achievements` 和 `GET /api/user/stats` 会基于真实用户状态同步成就进度。`UserAchievement.unlockedAt` 允许为空；只有 `unlockedAt != null` 才计入已解锁成就数量。
+
+### 0.5 注册链路
+
+注册接口使用 Supabase Edge Function server 根路径：
+
+```text
+https://<project>.supabase.co/functions/v1/make-server-481f4acb/signup
+```
+
+不要再拼接为 `/functions/v1/api/signup`。
+
 > **版本：** v1.3  
 > **冻结日期：** 2026-05-17（v1.0） → 2026-05-18（v1.3 格式补丁）  
 > **维护规则：** 任何人对任何字段做任何修改，必须先更新本文档并在团队群 @所有人，再改代码。  

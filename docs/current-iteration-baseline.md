@@ -68,3 +68,19 @@ python app.py
 - `backend/scripts/_*.mjs`、`backend/tests/` 中的一次性联调脚本。
 - 旧模型目录 `CE-CSL/checkpoints/`、`CE-CSL/models/`；正式模型文件使用 `CE-CSL/custom_model.pth` 和 `CE-CSL/custom_vocab.json`。
 - `.env`、真实数据库密码、service role key 或任何私密凭据。
+
+## 文档索引
+
+当前保留的有效文档：
+
+- `docs/current-iteration-baseline.md`：当前真实迭代基线和验证记录。
+- `docs/git-workflow.md`：分支、提交和 PR 流程。
+- `docs/frontend-dev-doc.md`：前端运行、路由、API 调用和页面约定。
+- `docs/backend-specification.md`：后端认证、路由、数据库和错误语义。
+- `docs/interfaces.md`：接口补充和历史接口细节。
+- `docs/CE-CSL_NATIVE_INFERENCE_HANDOFF.md`：CE-CSL 原生推理链路交接。
+
+已删除的历史文档：
+
+- `docs/phase2-development-plan.md`：旧 Phase 2 计划，已被当前基线和前后端文档替代。
+- `docs/frontend-nav-audit-report.md`：一次性导航审计报告，已不再作为迭代依据。

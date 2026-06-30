@@ -169,7 +169,7 @@ http://127.0.0.1:5173/sign-language
 - 网页通过浏览器采集画面，无法完全等同 OpenCV 直接读取摄像头；这主要影响镜像、裁剪和帧率。
 - Python MediaPipe / PyTorch 依赖较重，首次启动可能较慢。
 - 当前前端包体积仍有 Vite warning，但不影响本次功能。
-- 仓库中本地仍存在未提交临时文件：`.playwright-mcp/`、`CE-CSL/__pycache__/`。它们不是交付内容。
+- 临时缓存、`__pycache__`、一次性探针和旧模型目录不是交付内容，已通过 `.gitignore` 排除。
 - 仓库中还有两个未提交旧路线辅助文件：`backend/src/services/ceCslFeatureBuilder.ts`、`backend/src/services/ceCslSessionState.ts`。当前原生图像链路没有引用，后续确认无用后再清理。
 
 ## PR 审查重点
