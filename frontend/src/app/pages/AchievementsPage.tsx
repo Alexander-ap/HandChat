@@ -6,37 +6,64 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Award, Trophy, Target, Star, MessageCircle, Volume2, Hand } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { userApi } from "../lib/api";
+import { supabase } from "../lib/supabase";
+import { achievementsApi } from "../lib/api";
+import { syncAuthToken } from "../lib/api";
 import { useLanguage } from "../contexts/LanguageContext";
+
+interface AchievementItem {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  progress: number;
+  unlockedAt: string | null;
+}
+
+function resolveAchievementIcon(icon: string) {
+  switch (icon) {
+    case "hand":
+      return { icon: Hand, color: "text-blue-500", bg: "bg-blue-50" };
+    case "message_circle":
+      return { icon: MessageCircle, color: "text-pink-500", bg: "bg-pink-50" };
+    case "target":
+      return { icon: Target, color: "text-green-500", bg: "bg-green-50" };
+    case "volume2":
+      return { icon: Volume2, color: "text-indigo-500", bg: "bg-indigo-50" };
+    case "star":
+      return { icon: Star, color: "text-yellow-500", bg: "bg-yellow-50" };
+    case "trophy":
+    default:
+      return { icon: Trophy, color: "text-purple-500", bg: "bg-purple-50" };
+  }
+}
 
 export default function AchievementsPage() {
   const navigate = useNavigate();
   const { text } = useLanguage();
-  const [totalAchievements, setTotalAchievements] = useState(0);
+  const [achievements, setAchievements] = useState<AchievementItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchAchievements = async () => {
+      setLoading(true);
       try {
-        const data = await userApi.getStats();
-        if (data.stats) setTotalAchievements(data.stats.achievements || 0);
+        const { data: { session } } = await supabase.auth.getSession();
+        syncAuthToken(session?.access_token ?? null);
+        const data = await achievementsApi.getAll();
+        setAchievements(Array.isArray(data) ? data : []);
       } catch (e) {
         console.warn("[成就页面] 获取数据失败(可能未登录):", e);
-        setTotalAchievements(3);
+        setAchievements([]);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchStats();
+    fetchAchievements();
   }, []);
 
-  const achievements = [
-    { title: "初识手语", desc: "完成第一次手语识别", icon: Hand, color: "text-blue-500", bg: "bg-blue-50", unlocked: true },
-    { title: "交流达人", desc: "在社区发布10条动态", icon: MessageCircle, color: "text-pink-500", bg: "bg-pink-50", unlocked: totalAchievements >= 2 },
-    { title: "坚持不懈", desc: "连续登录7天", icon: Target, color: "text-green-500", bg: "bg-green-50", unlocked: totalAchievements >= 3 },
-    { title: "聆听者", desc: "使用声音检测功能50次", icon: Volume2, color: "text-indigo-500", bg: "bg-indigo-50", unlocked: totalAchievements >= 4 },
-    { title: "社区明星", desc: "获得100个赞", icon: Star, color: "text-yellow-500", bg: "bg-yellow-50", unlocked: totalAchievements >= 5 },
-    { title: "手语大师", desc: "完成所有基础课程", icon: Trophy, color: "text-purple-500", bg: "bg-purple-50", unlocked: totalAchievements >= 6 },
-  ];
-
-  const unlockedCount = achievements.filter(a => a.unlocked).length;
+  const unlockedCount = achievements.filter((item) => item.unlockedAt).length;
+  const progressPercent = achievements.length > 0 ? Math.round((unlockedCount / achievements.length) * 100) : 0;
 
   return (
     <div className="min-h-screen pb-24" style={{ background: 'var(--app-background, #F2F2F7)' }}>
@@ -62,14 +89,14 @@ export default function AchievementsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[13px] text-white/80">{text("已解锁成就", "Unlocked")}</p>
-              <div className="text-[30px] font-bold tracking-[-0.04em]">{unlockedCount} <span className="text-[14px] font-normal opacity-80">/ {achievements.length}</span></div>
+              <div className="text-[30px] font-bold tracking-[-0.04em]">{loading ? "--" : unlockedCount} <span className="text-[14px] font-normal opacity-80">/ {achievements.length}</span></div>
             </div>
             <Award className="w-14 h-14 text-white/20" />
           </div>
           <div className="mt-4 grid grid-cols-3 gap-3">
             <div className="rounded-[18px] border border-white/20 bg-white/12 px-3 py-3">
               <p className="text-[11px] text-white/70">{text("进度", "Progress")}</p>
-              <p className="mt-1 text-[13px] font-medium text-white">{Math.round((unlockedCount / achievements.length) * 100)}%</p>
+              <p className="mt-1 text-[13px] font-medium text-white">{progressPercent}%</p>
             </div>
             <div className="rounded-[18px] border border-white/20 bg-white/12 px-3 py-3">
               <p className="text-[11px] text-white/70">{text("最近目标", "Next Goal")}</p>
@@ -83,21 +110,33 @@ export default function AchievementsPage() {
         </div>
 
         <div className="space-y-2">
-          {achievements.map((item, idx) => {
-            const Icon = item.icon;
+          {!loading && achievements.length === 0 && (
+            <div className="app-panel rounded-[22px] p-6 text-center text-[14px] text-slate-400">
+              {text("暂无成就数据", "No achievement data yet")}
+            </div>
+          )}
+          {achievements.map((item) => {
+            const meta = resolveAchievementIcon(item.icon);
+            const Icon = meta.icon;
+            const unlocked = Boolean(item.unlockedAt);
             return (
               <div 
-                key={idx} 
-                className={`app-panel rounded-[22px] p-4 flex items-center gap-3 transition-all ${!item.unlocked ? 'opacity-55 grayscale' : ''}`}
+                key={item.id}
+                className={`app-panel rounded-[22px] p-4 flex items-center gap-3 transition-all ${!unlocked ? 'opacity-75' : ''}`}
               >
-                <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center flex-shrink-0 ${item.bg} ${item.color}`}>
+                <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center flex-shrink-0 ${meta.bg} ${meta.color}`}>
                   <Icon className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-[15px] font-bold text-slate-900">{item.title}</h3>
-                  <p className="text-[13px] text-slate-500 mt-0.5">{item.desc}</p>
+                  <h3 className="text-[15px] font-bold text-slate-900">{item.name}</h3>
+                  <p className="text-[13px] text-slate-500 mt-0.5">{item.description}</p>
+                  {!unlocked && (
+                    <p className="mt-1 text-[12px] text-slate-400">
+                      {text("当前进度", "Progress")}: {item.progress}%
+                    </p>
+                  )}
                 </div>
-                {item.unlocked && (
+                {unlocked && (
                   <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-medium text-indigo-500">
                     {text("已解锁", "Unlocked")}
                   </span>

@@ -6,11 +6,28 @@ import {
   getFollowingCount,
   getFollowerCount,
   isFollowing,
+  getFollowingStatus,
   getFollowingList,
   getFollowerList,
 } from '../services/followService'
 
 const router = Router()
+
+router.get('/following/status', authMiddleware, async (req, res, next) => {
+  try {
+    const ids = String(req.query.ids || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .slice(0, 100)
+    const followingIds = await getFollowingStatus(req.userId!, ids)
+    res.json({
+      following: Object.fromEntries(ids.map((id) => [id, followingIds.has(id)])),
+    })
+  } catch (err) {
+    next(err)
+  }
+})
 
 router.get('/:id/followers/count', async (req, res, next) => {
   try {

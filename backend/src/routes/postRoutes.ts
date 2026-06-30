@@ -1,8 +1,11 @@
-import { Router } from 'express'
-import { createClient } from '@supabase/supabase-js'
-import { authMiddleware } from '../middleware/auth'
+import { Router, type Request } from 'express'
+import {
+  authMiddleware,
+  getCachedAuthUserId,
+  readAuthToken,
+  resolveAuthUserId,
+} from '../middleware/auth'
 import { createRateLimit } from '../middleware/rateLimit'
-import { config } from '../config'
 import { prisma } from '../db'
 import { badRequest, notFound, sendError, sendOk, unauthorized } from '../http'
 import { moderateContent } from '../services/moderationService'
@@ -13,6 +16,7 @@ import {
   listFollowingPosts,
   updatePost,
   deletePost,
+  deleteComment,
   toggleLike,
   addComment,
   getComments,
@@ -23,7 +27,6 @@ import {
   getLikedPostIds,
 } from '../services/postService'
 
-const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey)
 const router = Router()
 const writeLimiter = createRateLimit('community-write', 30, 60 * 1000)
 const engageLimiter = createRateLimit('community-engage', 80, 60 * 1000)
@@ -42,15 +45,54 @@ function formatTimeAgo(input: Date | string) {
   return `${Math.floor(days / 30)}个月前`
 }
 
-async function resolveOptionalUserId(req: Parameters<typeof router.get>[1] extends never ? never : any) {
-  const token = req.headers.authorization?.replace('Bearer ', '')
+async function resolveOptionalUserId(req: Request, options: { verify?: boolean } = {}) {
+  const token = readAuthToken(req)
   if (!token) return null
-  try {
-    const { data: { user }, error } = await supabase.auth.getUser(token)
-    if (error || !user) return null
-    return user.id
-  } catch {
-    return null
+
+  if (!options.verify) {
+    return getCachedAuthUserId(token) ?? null
+  }
+
+  return resolveAuthUserId(token)
+}
+
+function cleanProfileValue(value: unknown, maxLength: number) {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  return trimmed.slice(0, maxLength)
+}
+
+async function ensureAuthorProfile(
+  userId: string,
+  data: { author?: unknown; authorName?: unknown; nickname?: unknown; name?: unknown; avatar?: unknown; avatarUrl?: unknown }
+) {
+  const nickname = cleanProfileValue(data.author ?? data.authorName ?? data.nickname ?? data.name, 80)
+  const avatar = cleanProfileValue(data.avatar ?? data.avatarUrl, 500)
+
+  if (!nickname && !avatar) return
+
+  const existing = await prisma.userProfile.findUnique({ where: { userId } })
+  if (!existing) {
+    await prisma.userProfile.create({
+      data: {
+        userId,
+        ...(nickname && { nickname }),
+        ...(avatar && { avatar }),
+      },
+    })
+    return
+  }
+
+  const updateData: { nickname?: string; avatar?: string } = {}
+  if (nickname && !existing.nickname) updateData.nickname = nickname
+  if (avatar && !existing.avatar) updateData.avatar = avatar
+
+  if (Object.keys(updateData).length > 0) {
+    await prisma.userProfile.update({
+      where: { userId },
+      data: updateData,
+    })
   }
 }
 
@@ -86,7 +128,7 @@ function mapComment(comment: {
     id: comment.id,
     content: comment.content,
     author: {
-      name: profile?.nickname || comment.authorId,
+      name: profile?.nickname || '用户',
       avatar: profile?.avatar || '',
     },
     authorId: comment.authorId,
@@ -121,7 +163,7 @@ function mapPost(post: {
     title: post.title,
     content: post.content,
     author: {
-      name: profile?.nickname || post.authorId,
+      name: profile?.nickname || '用户',
       avatar: profile?.avatar || '',
       verified: true,
     },
@@ -144,11 +186,91 @@ function mapPost(post: {
   }
 }
 
+type MappedPost = ReturnType<typeof mapPost>
+
+const PUBLIC_POST_CACHE_TTL_MS = Number(process.env.PUBLIC_POST_CACHE_TTL_MS) || 60 * 1000
+const publicPostCache = new Map<string, { expiresAt: number; posts: MappedPost[] }>()
+const publicPostInflight = new Map<string, Promise<MappedPost[]>>()
+
+function getPublicPostCacheKey(limit: number, offset: number) {
+  return `${limit}:${offset}`
+}
+
+function getCachedPublicPosts(cacheKey: string) {
+  const cached = publicPostCache.get(cacheKey)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    publicPostCache.delete(cacheKey)
+    return null
+  }
+  return cached.posts
+}
+
+function setCachedPublicPosts(cacheKey: string, posts: MappedPost[]) {
+  publicPostCache.set(cacheKey, {
+    posts,
+    expiresAt: Date.now() + PUBLIC_POST_CACHE_TTL_MS,
+  })
+}
+
+function clearPublicPostCache() {
+  publicPostCache.clear()
+}
+
+async function getPublicPosts(limit: number, offset: number) {
+  const cacheKey = getPublicPostCacheKey(limit, offset)
+  const cached = getCachedPublicPosts(cacheKey)
+  if (cached) return cached
+
+  const inflight = publicPostInflight.get(cacheKey)
+  if (inflight) return inflight
+
+  const loadPromise = (async () => {
+    const posts = await listPosts(limit, offset)
+    const profileMap = await buildProfileMap([
+      ...posts.map((post) => post.authorId),
+    ])
+    const mappedPosts = posts.map((post) => mapPost(post, { profileMap }))
+    setCachedPublicPosts(cacheKey, mappedPosts)
+    return mappedPosts
+  })()
+
+  publicPostInflight.set(cacheKey, loadPromise)
+  try {
+    return await loadPromise
+  } finally {
+    publicPostInflight.delete(cacheKey)
+  }
+}
+
+function applyViewerFlags(
+  posts: MappedPost[],
+  likedPostIds?: Set<string>,
+  bookmarkedPostIds?: Set<string>
+) {
+  return posts.map((post) => ({
+    ...post,
+    isLiked: likedPostIds?.has(post.id) ?? false,
+    isBookmarked: bookmarkedPostIds?.has(post.id) ?? false,
+  }))
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 20, 50)
     const offset = Math.max(Number(req.query.offset) || 0, 0)
-    const currentUserId = await resolveOptionalUserId(req)
+    let currentUserId: string | null = null
+    try {
+      currentUserId = await resolveOptionalUserId(req, { verify: req.query.feed === 'following' })
+    } catch {
+      return sendError(
+        res,
+        req,
+        503,
+        'AUTH_SERVICE_UNAVAILABLE',
+        'Authentication service is temporarily unavailable. Please try again later.'
+      )
+    }
 
     if (req.query.feed === 'following') {
       if (!currentUserId) {
@@ -157,7 +279,6 @@ router.get('/', async (req, res, next) => {
       const posts = await listFollowingPosts(currentUserId, limit, offset)
       const profileMap = await buildProfileMap([
         ...posts.map((post) => post.authorId),
-        ...posts.flatMap((post) => (post.comments || []).map((comment) => comment.authorId)),
       ])
       const [likedPostIds, bookmarkedPostIds] = await Promise.all([
         getLikedPostIds(currentUserId, posts.map((post) => post.id)),
@@ -168,19 +289,15 @@ router.get('/', async (req, res, next) => {
       })
     }
 
-    const posts = await listPosts(limit, offset)
-    const profileMap = await buildProfileMap([
-      ...posts.map((post) => post.authorId),
-      ...posts.flatMap((post) => (post.comments || []).map((comment) => comment.authorId)),
-    ])
+    const mappedPosts = await getPublicPosts(limit, offset)
     const [likedPostIds, bookmarkedPostIds] = currentUserId
       ? await Promise.all([
-          getLikedPostIds(currentUserId, posts.map((post) => post.id)),
-          getBookmarkedPostIds(currentUserId, posts.map((post) => post.id)),
+          getLikedPostIds(currentUserId, mappedPosts.map((post) => post.id)),
+          getBookmarkedPostIds(currentUserId, mappedPosts.map((post) => post.id)),
         ])
       : [undefined, undefined]
     sendOk(res, {
-      posts: posts.map((post) => mapPost(post, { profileMap, likedPostIds, bookmarkedPostIds })),
+      posts: applyViewerFlags(mappedPosts, likedPostIds, bookmarkedPostIds),
     })
   } catch (err) {
     next(err)
@@ -201,6 +318,7 @@ router.post('/', authMiddleware, writeLimiter, async (req, res, next) => {
     if (!req.userId) {
       throw unauthorized('请先登录')
     }
+    await ensureAuthorProfile(req.userId, req.body || {})
     const moderatedContent = moderateContent('post', effectiveContent)
     const moderatedTitle = effectiveTitle || moderatedContent.slice(0, 50)
     const post = await createPost({
@@ -208,6 +326,7 @@ router.post('/', authMiddleware, writeLimiter, async (req, res, next) => {
       content: moderatedContent,
       authorId: req.userId,
     })
+    clearPublicPostCache()
     const profileMap = await buildProfileMap([post.authorId])
     sendOk(res, {
       success: true,
@@ -239,6 +358,7 @@ router.put('/:id', authMiddleware, writeLimiter, async (req, res, next) => {
     if (!post) {
       throw notFound('帖子不存在或无权限编辑')
     }
+    clearPublicPostCache()
     const profileMap = await buildProfileMap([
       post.authorId,
       ...(post.comments || []).map((comment) => comment.authorId),
@@ -287,6 +407,7 @@ router.delete('/:id', authMiddleware, async (req, res, next) => {
     if (!result) {
       throw notFound('帖子不存在或无权限删除')
     }
+    clearPublicPostCache()
     sendOk(res, { success: true })
   } catch (err) {
     next(err)
@@ -300,6 +421,7 @@ router.post('/:id/like', authMiddleware, engageLimiter, async (req, res, next) =
     if (!result) {
       throw notFound('帖子不存在')
     }
+    clearPublicPostCache()
     sendOk(res, result)
   } catch (err) {
     next(err)
@@ -343,11 +465,26 @@ router.post('/:id/comments', authMiddleware, engageLimiter, async (req, res, nex
     if (!comment) {
       throw notFound('帖子不存在')
     }
+    clearPublicPostCache()
     const profileMap = await buildProfileMap([comment.authorId])
     sendOk(res, {
       success: true,
       comment: mapComment(comment, profileMap),
     }, 201)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.delete('/:id/comments/:commentId', authMiddleware, async (req, res, next) => {
+  try {
+    const commentId = String(req.params.commentId)
+    const result = await deleteComment(commentId, req.userId!)
+    if (!result) {
+      throw notFound('评论不存在或无权限删除')
+    }
+    clearPublicPostCache()
+    sendOk(res, { success: true })
   } catch (err) {
     next(err)
   }

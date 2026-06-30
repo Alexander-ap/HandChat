@@ -19,8 +19,12 @@ export async function createPost(input: CreatePostInput) {
   return post
 }
 
-const postListInclude = {
+const postSummaryInclude = {
   _count: { select: { comments: true } },
+}
+
+const postDetailInclude = {
+  ...postSummaryInclude,
   comments: {
     orderBy: { createdAt: 'asc' as const },
     take: 3,
@@ -38,7 +42,7 @@ export async function listPosts(limit = 20, offset = 0) {
     orderBy: { createdAt: 'desc' },
     take: limit,
     skip: offset,
-    include: postListInclude,
+    include: postSummaryInclude,
   })
 }
 
@@ -46,7 +50,7 @@ export async function getPostById(postId: string) {
   return prisma.post.findUnique({
     where: { id: postId },
     include: {
-      ...postListInclude,
+      ...postDetailInclude,
       comments: {
         orderBy: { createdAt: 'asc' },
         select: {
@@ -80,6 +84,16 @@ export async function deletePost(postId: string, userId: string) {
   if (result.count === 0) return null
   logger.info('Post deleted', { postId, userId })
   return { id: postId }
+}
+
+export async function listUserPosts(userId: string, limit = 20, offset = 0) {
+  return prisma.post.findMany({
+    where: { authorId: userId },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    skip: offset,
+    include: postSummaryInclude,
+  })
 }
 
 export async function toggleLike(postId: string, userId: string) {
@@ -145,6 +159,29 @@ export async function getComments(postId: string, limit = 20, offset = 0) {
   })
 }
 
+export async function listUserComments(userId: string, limit = 20, offset = 0) {
+  return prisma.comment.findMany({
+    where: { authorId: userId },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    skip: offset,
+    include: {
+      post: {
+        include: postSummaryInclude,
+      },
+    },
+  })
+}
+
+export async function deleteComment(commentId: string, userId: string) {
+  const result = await prisma.comment.deleteMany({
+    where: { id: commentId, authorId: userId },
+  })
+  if (result.count === 0) return null
+  logger.info('Comment deleted', { commentId, userId })
+  return { id: commentId }
+}
+
 export async function listFollowingPosts(userId: string, limit = 20, offset = 0) {
   const follows = await prisma.follow.findMany({
     where: { followerId: userId },
@@ -158,7 +195,7 @@ export async function listFollowingPosts(userId: string, limit = 20, offset = 0)
     orderBy: { createdAt: 'desc' },
     take: limit,
     skip: offset,
-    include: postListInclude,
+    include: postSummaryInclude,
   })
 }
 
@@ -215,7 +252,7 @@ export async function listBookmarkedPosts(userId: string, limit = 20, offset = 0
     skip: offset,
     include: {
       post: {
-        include: postListInclude,
+        include: postSummaryInclude,
       },
     },
   })

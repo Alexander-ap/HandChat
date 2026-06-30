@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useOutletContext } from "react-router";
 import {
   User, Settings, Bell, Shield, HelpCircle, FileText, ChevronRight,
-  Star, Award, TrendingUp, Calendar, Palette, Lock,
+  Star, Award, TrendingUp, Calendar, Palette, Lock, MessageCircle,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Button } from "../components/ui/button";
@@ -19,7 +19,7 @@ import { PageStateContext } from "../components/Root";
 import ThemeSelector from "../components/ThemeSelector";
 import LanguageSelector from "../components/LanguageSelector";
 import { supabase } from "../lib/supabase";
-import { userApi } from "../lib/api";
+import { syncAuthToken, userApi } from "../lib/api";
 import { PROFILE_STATS_REFRESH_EVENT } from "../lib/profileEvents";
 import { useLanguage } from "../contexts/LanguageContext";
 
@@ -41,6 +41,7 @@ export default function ProfilePage() {
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileState | null>(savedState.userProfile || null);
   const [stats, setStats] = useState(savedState.stats || { days: 0, points: 0, achievements: 0, postCount: 0, followingCount: 0, followerCount: 0 });
+  const [statsLoaded, setStatsLoaded] = useState(Boolean(savedState.statsLoaded));
   const { text, language } = useLanguage();
 
   const fetchData = useCallback(async () => {
@@ -51,6 +52,7 @@ export default function ProfilePage() {
         return;
       }
 
+      syncAuthToken(session.access_token ?? null);
       const meta = session.user.user_metadata || {};
       const fallbackProfile: UserProfileState = {
         name: meta.name || text("用户", "User"),
@@ -92,6 +94,7 @@ export default function ProfilePage() {
           followingCount: statsData.stats.followingCount || 0,
           followerCount: statsData.stats.followerCount || 0,
         });
+        setStatsLoaded(true);
       }
 
       if (settingsData) {
@@ -142,8 +145,8 @@ export default function ProfilePage() {
   }, [fetchData]);
 
   useEffect(() => {
-    setPageState('profile', { notifications, vibration, userProfile, stats });
-  }, [notifications, vibration, userProfile, stats, setPageState]);
+    setPageState('profile', { notifications, vibration, userProfile, stats, statsLoaded });
+  }, [notifications, vibration, userProfile, stats, statsLoaded, setPageState]);
 
   const handleNotificationsChange = async (checked: boolean) => {
     const previous = notifications;
@@ -170,9 +173,9 @@ export default function ProfilePage() {
   };
 
   const userStats = [
-    { label: text("帖子", "Posts"), value: stats.postCount, icon: FileText },
-    { label: text("关注", "Following"), value: stats.followingCount, icon: TrendingUp },
-    { label: text("粉丝", "Followers"), value: stats.followerCount, icon: Award },
+    { label: text("帖子", "Posts"), value: statsLoaded ? stats.postCount : "--", icon: FileText },
+    { label: text("关注", "Following"), value: statsLoaded ? stats.followingCount : "--", icon: TrendingUp },
+    { label: text("粉丝", "Followers"), value: statsLoaded ? stats.followerCount : "--", icon: Award },
   ];
 
   const settingsGroups = [
@@ -190,9 +193,11 @@ export default function ProfilePage() {
     {
       title: text("数据与成就", "Data & Achievements"),
       items: [
-        { icon: Calendar, label: text("使用统计", "Usage Stats"), badge: `${stats.days}${text("天", "d")}`, action: () => navigate("/usage"), color: "text-green-500", bg: "bg-green-50" },
-        { icon: Star, label: text("我的积分", "My Points"), badge: `${stats.points.toLocaleString()}`, action: () => navigate("/points"), color: "text-orange-500", bg: "bg-orange-50" },
-        { icon: Award, label: text("成就徽章", "Achievements"), badge: `${stats.achievements}${text("个", "")}`, action: () => navigate("/achievements"), color: "text-indigo-500", bg: "bg-indigo-50" },
+        { icon: Calendar, label: text("使用统计", "Usage Stats"), badge: statsLoaded ? `${stats.days}${text("天", "d")}` : "...", action: () => navigate("/usage"), color: "text-green-500", bg: "bg-green-50" },
+        { icon: Star, label: text("我的积分", "My Points"), badge: statsLoaded ? `${stats.points.toLocaleString()}` : "...", action: () => navigate("/points"), color: "text-orange-500", bg: "bg-orange-50" },
+        { icon: Award, label: text("成就徽章", "Achievements"), badge: statsLoaded ? `${stats.achievements}${text("个", "")}` : "...", action: () => navigate("/achievements"), color: "text-indigo-500", bg: "bg-indigo-50" },
+        { icon: FileText, label: text("我的帖子", "My Posts"), badge: statsLoaded ? `${stats.postCount}` : "...", action: () => navigate("/profile/posts"), color: "text-blue-500", bg: "bg-blue-50" },
+        { icon: MessageCircle, label: text("我的评论", "My Comments"), badge: text("管理", "Manage"), action: () => navigate("/profile/comments"), color: "text-pink-500", bg: "bg-pink-50" },
       ],
     },
     {
@@ -260,7 +265,7 @@ export default function ProfilePage() {
               } else if (stat.label === text("粉丝", "Followers")) {
                 navigate("/profile/follow?tab=followers");
               } else {
-                navigate("/community");
+                navigate("/profile/posts");
               }
             };
             return (

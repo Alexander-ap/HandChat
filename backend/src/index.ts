@@ -11,6 +11,7 @@ import followRoutes from './routes/followRoutes';
 import achievementRoutes from './routes/achievementRoutes';
 import pointsRoutes from './routes/pointsRoutes';
 import userRoutes from './routes/userRoutes';
+import { AppError, sendError } from './http';
 
 const app = express();
 const server = createServer(app);
@@ -43,7 +44,17 @@ app.use('/api/user', followRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/points', pointsRoutes);
 
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err instanceof AppError) {
+    logger.warn('Handled API error', {
+      error: err.message,
+      code: err.code,
+      status: err.status,
+      details: err.details,
+    });
+    return sendError(res, req, err.status, err.code, err.message, err.details);
+  }
+
   logger.error('Unhandled API error', { error: err.message, stack: err.stack });
   res.status(500).json({ error: config.nodeEnv === 'development' ? err.message : 'Internal server error' });
 });

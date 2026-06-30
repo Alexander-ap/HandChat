@@ -5,7 +5,7 @@ import WelcomeScreen from "./WelcomeScreen";
 import { useTheme } from "../contexts/ThemeContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { supabase } from "../lib/supabase";
-import { syncAuthToken } from "../lib/api";
+import { syncAuthToken, userApi } from "../lib/api";
 
 export interface PageStateContext {
   getPageState: (key: string) => any;
@@ -33,6 +33,44 @@ async function __dbgReport__(payload: Record<string, any>) {
 
 /** 主页面路径集合 - 这些是底部导航栏对应的页面 */
 const MAIN_PAGES = new Set(["/", "/sign-language", "/sound", "/community", "/profile"]);
+const PUBLIC_ROOT_PATHS = new Set(["/help", "/privacy", "/agreement"]);
+
+type AuthUserSnapshot = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+};
+
+function buildAuthUserSnapshot(user: any): AuthUserSnapshot | null {
+  if (!user?.id) return null;
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    name: user.user_metadata?.name ?? null,
+    avatarUrl: user.user_metadata?.avatar_url ?? null,
+  };
+}
+
+function isPublicRootPath(pathname: string) {
+  return PUBLIC_ROOT_PATHS.has(pathname);
+}
+
+function getWelcomeStorageKey(userId: string | null) {
+  return userId ? `hasSeenWelcome:${userId}` : "hasSeenWelcome";
+}
+
+function hasLocalWelcomeFlag(userId: string | null) {
+  return (
+    localStorage.getItem(getWelcomeStorageKey(userId)) === "true" ||
+    localStorage.getItem("hasSeenWelcome") === "true"
+  );
+}
+
+function markLocalWelcomeSeen(userId: string | null) {
+  localStorage.setItem("hasSeenWelcome", "true");
+  if (userId) localStorage.setItem(getWelcomeStorageKey(userId), "true");
+}
 
 function RootContent() {
   const location = useLocation();
@@ -51,6 +89,7 @@ function RootContent() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUserSnapshot | null>(null);
   const pageStateRef = useRef<Record<string, any>>({});
   const { currentTheme } = useTheme();
   const { text } = useLanguage();
@@ -94,6 +133,7 @@ function RootContent() {
 
         syncAuthToken(session?.access_token || null);
         setIsLoggedIn(Boolean(session));
+        setAuthUser(buildAuthUserSnapshot(session?.user));
         setAuthChecked(true);
         //#region debug-point follow-auth-after-login
         void __dbgReport__({
@@ -107,6 +147,7 @@ function RootContent() {
         if (!mounted) return;
         syncAuthToken(null);
         setIsLoggedIn(false);
+        setAuthUser(null);
         setAuthChecked(true);
         //#region debug-point follow-auth-after-login
         void __dbgReport__({
@@ -124,6 +165,7 @@ function RootContent() {
       
       // 同步 token 到 api
       syncAuthToken(session?.access_token || null);
+      setAuthUser(buildAuthUserSnapshot(session?.user));
       //#region debug-point follow-auth-after-login
       void __dbgReport__({
         evt: "auth.onAuthStateChange",
@@ -158,16 +200,72 @@ function RootContent() {
   }, [navigate, location.pathname]);
 
   useEffect(() => {
-    // 检查是否是首次访问
-    const hasSeenWelcome = localStorage.getItem("hasSeenWelcome");
-    if (!hasSeenWelcome && location.pathname === "/" && isLoggedIn) {
-      setShowWelcome(true);
+    if (!authChecked) return;
+    if (!isLoggedIn && !isPublicRootPath(location.pathname)) {
+      navigate("/login", { replace: true });
     }
-  }, [location.pathname, isLoggedIn]);
+  }, [authChecked, isLoggedIn, location.pathname, navigate]);
+
+  useEffect(() => {
+    // 检查是否是首次访问
+    let cancelled = false;
+
+    const checkWelcomeState = async () => {
+      if (location.pathname !== "/" || !isLoggedIn) {
+        setShowWelcome(false);
+        return;
+      }
+
+      const userId = authUser?.id ?? null;
+      if (hasLocalWelcomeFlag(userId)) {
+        setShowWelcome(false);
+        return;
+      }
+
+      try {
+        const profile = await userApi.getProfile();
+        if (cancelled) return;
+
+        const profileExists = Boolean(
+          profile?.profileExists ||
+          profile?.nickname ||
+          profile?.avatar ||
+          profile?.bio
+        );
+        if (profileExists) {
+          markLocalWelcomeSeen(userId);
+          setShowWelcome(false);
+          return;
+        }
+      } catch (error) {
+        console.warn("[Root] Failed to check remote profile before welcome:", error);
+        if (cancelled) return;
+        setShowWelcome(false);
+        return;
+      }
+
+      if (!cancelled) setShowWelcome(true);
+    };
+
+    void checkWelcomeState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, isLoggedIn, authUser?.id]);
 
   const handleWelcomeComplete = () => {
-    localStorage.setItem("hasSeenWelcome", "true");
+    markLocalWelcomeSeen(authUser?.id ?? null);
     setShowWelcome(false);
+    if (authUser) {
+      const fallbackName = authUser.name || authUser.email?.split("@")[0] || undefined;
+      void userApi.updateProfile({
+        name: fallbackName,
+        avatar_url: authUser.avatarUrl || undefined,
+      }).catch((error) => {
+        console.warn("[Root] Failed to mark welcome complete remotely:", error);
+      });
+    }
   };
 
   // 未完成认证检查时显示加载

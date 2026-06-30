@@ -45,16 +45,33 @@ supabase/.temp/
 # Debug & smoke test artifacts
 .dbg/
 .npm-cache/
+_kill_ports.ps1
+_temp_kill.ps1
+_test_*.cjs
+_test_*.mjs
+debug-*.md
 
 # CE-CSL local venv & cache
 CE-CSL/.venv/
 CE-CSL/.pydeps/
 CE-CSL/__pycache__/
+CE-CSL/checkpoints/
+CE-CSL/models/
+CE-CSL/_*.py
 
 # Test reports & probe outputs
 backend/integration-report.json
 backend/probe-latest.json
 backend/stress-report.json
+backend/db-ping.txt
+backend/playwright-install.txt
+backend/probe-*.txt
+backend/scripts/integration-test.mjs
+backend/scripts/_*.mjs
+backend/tests/
+
+# Capacitor local/default-package leftovers
+frontend/android/app/src/main/java/com/getcapacitor/
 
 # Debug log dumps
 *.ndjson

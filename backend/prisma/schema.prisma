@@ -131,7 +131,7 @@ model UserAchievement {
   userId        String
   achievementId String
   achievement   Achievement @relation(fields: [achievementId], references: [id])
-  unlockedAt    DateTime    @default(now())
+  unlockedAt    DateTime?
   progress      Int         @default(0)
 
   @@unique([userId, achievementId])

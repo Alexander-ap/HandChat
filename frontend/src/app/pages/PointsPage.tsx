@@ -7,7 +7,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Star, Gift, ShoppingBag, Crown } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { userApi } from "../lib/api";
+import { supabase } from "../lib/supabase";
+import { syncAuthToken, userApi } from "../lib/api";
 import { useLanguage } from "../contexts/LanguageContext";
 import { toast } from "sonner";
 
@@ -19,15 +20,47 @@ interface PointRecord {
   date: string;
 }
 
+function formatPointsRecord(reason: string) {
+  switch (reason) {
+    case "post":
+      return { title: "发布帖子", type: "earn" };
+    case "comment":
+      return { title: "发表评论", type: "earn" };
+    case "sound_detection":
+      return { title: "声音检测", type: "earn" };
+    case "sign_language":
+      return { title: "手语识别", type: "earn" };
+    case "ocr":
+      return { title: "OCR 识别", type: "earn" };
+    default:
+      return { title: reason || "积分变动", type: "earn" };
+  }
+}
+
+function formatDateLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function PointsPage() {
   const navigate = useNavigate();
   const { text } = useLanguage();
   const [totalPoints, setTotalPoints] = useState(0);
   const [history, setHistory] = useState<PointRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        syncAuthToken(session?.access_token ?? null);
         const [statsData, pointsData] = await Promise.allSettled([
           userApi.getStats(),
           userApi.getPointsHistory()
@@ -39,8 +72,17 @@ export default function PointsPage() {
           setTotalPoints(0);
         }
         
-        if (pointsData.status === 'fulfilled' && pointsData.value.records) {
-          setHistory(pointsData.value.records);
+        if (pointsData.status === 'fulfilled' && Array.isArray(pointsData.value.records)) {
+          setHistory(pointsData.value.records.map((item: any) => {
+            const meta = formatPointsRecord(item.reason);
+            return {
+              id: item.id,
+              title: meta.title,
+              points: Number(item.amount || 0),
+              type: meta.type,
+              date: formatDateLabel(item.createdAt),
+            };
+          }));
         } else {
           setHistory([]);
         }
@@ -48,6 +90,8 @@ export default function PointsPage() {
         console.error("[积分页面] 获取数据失败:", e);
         setHistory([]);
         setTotalPoints(0);
+      } finally {
+        setLoading(false);
       }
     };
     fetchData();
@@ -75,12 +119,12 @@ export default function PointsPage() {
             <p className="text-[13px] text-white/80">{text("可用积分", "Available Points")}</p>
             <div className="mt-2 flex items-center gap-2">
               <Star className="h-6 w-6 fill-current" />
-              <span className="text-[38px] font-bold tracking-[-0.04em]">{totalPoints.toLocaleString()}</span>
+              <span className="text-[38px] font-bold tracking-[-0.04em]">{loading ? "--" : totalPoints.toLocaleString()}</span>
             </div>
             <div className="mt-4 grid grid-cols-3 gap-3">
               <div className="rounded-[18px] border border-white/20 bg-white/12 px-3 py-3 backdrop-blur">
                 <p className="text-[11px] text-white/70">{text("累计记录", "Records")}</p>
-                <p className="mt-1 text-[13px] font-medium text-white">{history.length} {text("条", "items")}</p>
+                <p className="mt-1 text-[13px] font-medium text-white">{loading ? "--" : `${history.length} ${text("条", "items")}`}</p>
               </div>
               <div className="rounded-[18px] border border-white/20 bg-white/12 px-3 py-3 backdrop-blur">
                 <p className="text-[11px] text-white/70">{text("积分状态", "Status")}</p>

@@ -12,8 +12,7 @@ import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { toast } from "sonner";
-import { supabase } from "../lib/supabase";
-import { followApi, userApi } from "../lib/api";
+import { followApi, getCurrentAuthUserId, userApi } from "../lib/api";
 
 /** 列表中的用户数据结构 */
 interface FollowUser {
@@ -118,13 +117,11 @@ export default function FollowListPage() {
   useEffect(() => {
     const init = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
-          navigate("/login");
+        const uid = await getCurrentAuthUserId();
+        if (!uid) {
+          navigate("/login", { replace: true });
           return;
         }
-
-        const uid = session.user.id;
         setCurrentUserId(uid);
 
         // 并行获取关注和粉丝计数

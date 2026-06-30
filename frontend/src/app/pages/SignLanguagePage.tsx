@@ -54,6 +54,29 @@ import {
 } from "../lib/signLanguageStore";
 import { getCurrentAuthToken } from "../lib/api";
 
+// #region debug-point E:sign-language-runtime
+const __DBG_URL__ = "http://127.0.0.1:7777/event";
+async function __dbgReport__(payload: Record<string, unknown>) {
+  if (!(import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEBUG_TELEMETRY === "true")) return;
+  try {
+    await fetch(__DBG_URL__, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "web-smoke-check",
+        runId: "pre-fix",
+        hypothesisId: "E",
+        location: "frontend/src/app/pages/SignLanguagePage.tsx",
+        msg: "[DEBUG] Sign language runtime",
+        ts: Date.now(),
+        src: "frontend",
+        ...payload,
+      }),
+    });
+  } catch (_) {}
+}
+// #endregion
+
 interface ProtocolPreviewState {
   frameId: number;
   handsCount: number;
@@ -247,6 +270,12 @@ export default function SignLanguagePage() {
 
   useEffect(() => {
     setStoredHandChatLiveMode(liveMode);
+    // #region debug-point E:mode-change
+    void __dbgReport__({
+      evt: "sign.mode.change",
+      liveMode,
+    });
+    // #endregion
   }, [liveMode]);
 
   useEffect(() => {
@@ -299,6 +328,13 @@ export default function SignLanguagePage() {
             ? "真实服务会话已同步，可继续识别。"
             : "真实服务会话接口已连接，点击开始识别后将连接 WebSocket。"
         );
+        // #region debug-point E:server-session-refresh
+        void __dbgReport__({
+          evt: "sign.server.refreshSessionViews.ok",
+          targetSessionId: targetSessionId ?? null,
+          sessionsCount: sessions.length,
+        });
+        // #endregion
       }
 
       if (targetSessionId) {
@@ -312,6 +348,13 @@ export default function SignLanguagePage() {
         setServiceNotice(descriptor.message);
         setRecentSessions([]);
         setResumableSessionId(null);
+        // #region debug-point E:server-session-refresh-error
+        void __dbgReport__({
+          evt: "sign.server.refreshSessionViews.error",
+          targetSessionId: targetSessionId ?? null,
+          message: (error as any)?.message ?? String(error),
+        });
+        // #endregion
       }
     }
   }, [activeSessionId, liveMode]);
@@ -393,6 +436,12 @@ export default function SignLanguagePage() {
         onOpen: () => {
           setWsStatus("connected");
           setServiceNotice(`实时服务已连接：${HANDCHAT_DEFAULT_WS_URL}`);
+          // #region debug-point E:ws-open
+          void __dbgReport__({
+            evt: "sign.ws.open",
+            url: HANDCHAT_DEFAULT_WS_URL,
+          });
+          // #endregion
         },
         onClose: (event) => {
           const descriptor = mapWsCloseReason(event.code);
@@ -400,14 +449,34 @@ export default function SignLanguagePage() {
           if (event.code !== 1000) {
             setServiceNotice(descriptor.message);
           }
+          // #region debug-point E:ws-close
+          void __dbgReport__({
+            evt: "sign.ws.close",
+            code: event.code,
+            reason: event.reason || null,
+          });
+          // #endregion
         },
         onError: () => {
           setWsStatus("error");
           setServiceNotice("实时服务连接异常，请检查服务端或网络状态。");
+          // #region debug-point E:ws-error
+          void __dbgReport__({
+            evt: "sign.ws.error",
+            url: HANDCHAT_DEFAULT_WS_URL,
+          });
+          // #endregion
         },
         onReconnectAttempt: (attempt, maxAttempts) => {
           setWsStatus("reconnecting");
           setServiceNotice(`实时服务已断开，正在重连 (${attempt}/${maxAttempts})...`);
+          // #region debug-point E:ws-reconnect
+          void __dbgReport__({
+            evt: "sign.ws.reconnectAttempt",
+            attempt,
+            maxAttempts,
+          });
+          // #endregion
         },
         onReconnectExhausted: () => {
           setWsStatus("error");
@@ -573,6 +642,12 @@ export default function SignLanguagePage() {
         try {
           detectorRef.current = await createHandDetector({ maxHands: 2 });
         } catch (err: any) {
+          // #region debug-point E:image-detector-error
+          void __dbgReport__({
+            evt: "sign.image.detector.error",
+            message: err?.message ?? String(err),
+          });
+          // #endregion
           toast.error("加载手势识别AI模型失败：" + err.message);
           setModelLoading(false);
           return;
@@ -691,6 +766,13 @@ export default function SignLanguagePage() {
         try {
           detectorRef.current = await createHandDetector({ maxHands: 2 });
         } catch (e: any) {
+          // #region debug-point E:camera-detector-error
+          void __dbgReport__({
+            evt: "sign.camera.detector.error",
+            liveMode,
+            message: e?.message ?? String(e),
+          });
+          // #endregion
           throw new Error("加载手势模型失败 (请检查网络/跨域限制): " + e.message);
         }
       }

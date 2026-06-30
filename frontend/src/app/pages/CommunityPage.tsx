@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useOutletContext, useNavigate } from "react-router";
-import { Plus, Heart, MessageCircle, Share2, Bookmark, Send, X, Image as ImageIcon } from "lucide-react";
+import { Plus, Heart, MessageCircle, Share2, Bookmark, Send, X, Image as ImageIcon, UserCheck, UserPlus } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
@@ -16,9 +16,32 @@ import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
 import { PageStateContext } from "../components/Root";
 import { motion } from "motion/react";
-import { postsApi, userApi, syncAuthToken } from "../lib/api";
+import { followApi, getCurrentAuthToken, getCurrentAuthUserId, postsApi, userApi, syncAuthToken } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { useLanguage } from "../contexts/LanguageContext";
+
+// #region debug-point B:community-actions
+const __DBG_URL__ = "http://127.0.0.1:7777/event";
+async function __dbgReport__(payload: Record<string, unknown>) {
+  if (!(import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEBUG_TELEMETRY === "true")) return;
+  try {
+    await fetch(__DBG_URL__, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "web-smoke-check",
+        runId: "pre-fix",
+        hypothesisId: "B",
+        location: "frontend/src/app/pages/CommunityPage.tsx",
+        msg: "[DEBUG] Community action",
+        ts: Date.now(),
+        src: "frontend",
+        ...payload,
+      }),
+    });
+  } catch (_) {}
+}
+// #endregion
 
 /** 帖子数据结构 */
 interface Post {
@@ -34,6 +57,7 @@ interface Post {
   timeAgo: string;
   createdAt?: number;
   userId?: string;
+  authorId?: string;
 }
 
 /** 评论数据结构 */
@@ -94,6 +118,10 @@ function reconcileLocalPosts(serverPosts: Post[]) {
   writeLocalPosts(readLocalPosts().filter((post) => !serverIds.has(post.id)));
 }
 
+function getPostAuthorId(post: Post) {
+  return post.authorId || post.userId || "";
+}
+
 export default function CommunityPage() {
   const { getPageState, setPageState } = useOutletContext<PageStateContext>();
   const savedState = getPageState('community') || {};
@@ -121,6 +149,9 @@ export default function CommunityPage() {
   const [bookmarksError, setBookmarksError] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [publishingPost, setPublishingPost] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [followingByAuthor, setFollowingByAuthor] = useState<Record<string, boolean>>({});
+  const [followBusyByAuthor, setFollowBusyByAuthor] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 评论相关
@@ -137,12 +168,45 @@ export default function CommunityPage() {
   };
 
   const ensureCommunitySession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
+    const token = await getCurrentAuthToken();
+    // #region debug-point B:ensure-community-session
+    void __dbgReport__({
+      evt: "community.ensureSession",
+      hasAccessToken: Boolean(token),
+    });
+    // #endregion
+    if (!token) {
       throw new Error(text("请先登录后再操作", "Please sign in to continue"));
     }
-    syncAuthToken(session.access_token);
-    return session;
+    syncAuthToken(token);
+    return token;
+  };
+
+  useEffect(() => {
+    void getCurrentAuthUserId().then((uid) => setCurrentUserId(uid));
+  }, []);
+
+  const syncFollowStates = async (items: Post[]) => {
+    try {
+      const uid = currentUserId || await getCurrentAuthUserId();
+      if (!uid) return;
+      if (!currentUserId) setCurrentUserId(uid);
+
+      const authorIds = [...new Set(
+        items
+          .map(getPostAuthorId)
+          .filter((id) => id && id !== uid)
+      )];
+      if (authorIds.length === 0) return;
+
+      const data = await followApi.getFollowingStatus(authorIds);
+      setFollowingByAuthor((prev) => ({
+        ...prev,
+        ...(data?.following || {}),
+      }));
+    } catch (error) {
+      console.warn("[社区] 获取关注状态失败:", error);
+    }
   };
 
   /** 获取帖子列表 */
@@ -152,12 +216,16 @@ export default function CommunityPage() {
     if (feed === "following") setFollowingError(null);
     else setRecommendedError(null);
     try {
+      if (feed === "following") {
+        await ensureCommunitySession();
+      }
       const data = feed === "following"
         ? await postsApi.getAll("following")
         : await postsApi.getAll();
 
       const nextPosts = data.posts && Array.isArray(data.posts) ? data.posts : [];
       if (data.posts && Array.isArray(data.posts)) {
+        void syncFollowStates(nextPosts);
         if (feed === "following") {
           setFollowingPosts(nextPosts);
           setFollowingLoaded(true);
@@ -209,11 +277,28 @@ export default function CommunityPage() {
     setBookmarksError(null);
     try {
       await ensureCommunitySession();
+      // #region debug-point B:fetch-bookmarks
+      void __dbgReport__({
+        evt: "community.fetchBookmarks.begin",
+      });
+      // #endregion
       const data = await userApi.getBookmarks();
       const nextPosts = Array.isArray(data?.posts) ? data.posts : [];
+      // #region debug-point B:fetch-bookmarks-result
+      void __dbgReport__({
+        evt: "community.fetchBookmarks.result",
+        count: nextPosts.length,
+      });
+      // #endregion
       setBookmarkedPosts(nextPosts);
       setBookmarksLoaded(true);
     } catch (error: any) {
+      // #region debug-point B:fetch-bookmarks-error
+      void __dbgReport__({
+        evt: "community.fetchBookmarks.error",
+        message: error?.message ?? String(error),
+      });
+      // #endregion
       const message = error?.message || text("加载失败，请稍后重试", "Failed to load. Please try again.");
       setBookmarksError(message);
       setBookmarksLoaded(true);
@@ -226,13 +311,14 @@ export default function CommunityPage() {
   useEffect(() => { void fetchPosts(); }, []);
 
   useEffect(() => {
-    if (activeTab === "following" && !followingLoaded) {
+    if (activeTab === "following") {
       void fetchPosts("following");
+      return;
     }
-    if (activeTab === "bookmarks" && !bookmarksLoaded) {
+    if (activeTab === "bookmarks") {
       void fetchBookmarks();
     }
-  }, [activeTab, followingLoaded, bookmarksLoaded]);
+  }, [activeTab]);
 
   useEffect(() => {
     setPageState('community', {
@@ -291,7 +377,20 @@ export default function CommunityPage() {
       post.id === postId ? { ...post, isBookmarked: !post.isBookmarked } : post
     ));
     try { 
+      // #region debug-point B:bookmark-begin
+      void __dbgReport__({
+        evt: "community.bookmark.begin",
+        postId,
+        wasBookmarked: Boolean(targetPost?.isBookmarked),
+      });
+      // #endregion
       await postsApi.bookmark(postId); 
+      // #region debug-point B:bookmark-success
+      void __dbgReport__({
+        evt: "community.bookmark.success",
+        postId,
+      });
+      // #endregion
       if (bookmarksLoaded) {
         if (targetPost?.isBookmarked) {
           setBookmarkedPosts((prev) => prev.filter((post) => post.id !== postId));
@@ -300,8 +399,18 @@ export default function CommunityPage() {
         } else {
           void fetchBookmarks();
         }
+      } else if (targetPost && !targetPost.isBookmarked) {
+        setBookmarkedPosts((prev) => mergePostLists([{ ...targetPost, isBookmarked: true }], prev));
       }
+      setBookmarksLoaded(true);
     } catch (e: any) { 
+      // #region debug-point B:bookmark-error
+      void __dbgReport__({
+        evt: "community.bookmark.error",
+        postId,
+        message: e?.message ?? String(e),
+      });
+      // #endregion
       // 回滚乐观更新
       updatePostCollections(prev => prev.map(post =>
         post.id === postId ? { ...post, isBookmarked: !post.isBookmarked } : post
@@ -314,15 +423,70 @@ export default function CommunityPage() {
     }
   };
 
+  const handleToggleFollow = async (authorId: string) => {
+    if (!authorId) return;
+    try {
+      await ensureCommunitySession();
+    } catch (e: any) {
+      toast.error(e.message || text("请先登录后再操作", "Please sign in to continue"));
+      return;
+    }
+
+    const uid = currentUserId || await getCurrentAuthUserId();
+    if (uid && authorId === uid) {
+      toast.info(text("不能关注自己", "You cannot follow yourself"));
+      return;
+    }
+
+    const wasFollowing = Boolean(followingByAuthor[authorId]);
+    setFollowBusyByAuthor((prev) => ({ ...prev, [authorId]: true }));
+    setFollowingByAuthor((prev) => ({ ...prev, [authorId]: !wasFollowing }));
+
+    try {
+      if (wasFollowing) {
+        await followApi.unfollow(authorId);
+        setFollowingPosts((prev) => prev.filter((post) => getPostAuthorId(post) !== authorId));
+        toast.success(text("已取消关注", "Unfollowed"));
+      } else {
+        await followApi.follow(authorId);
+        toast.success(text("已关注", "Following"));
+      }
+    } catch (error: any) {
+      setFollowingByAuthor((prev) => ({ ...prev, [authorId]: wasFollowing }));
+      toast.error(error?.message || text("操作失败，请重试", "Action failed. Please try again"));
+    } finally {
+      setFollowBusyByAuthor((prev) => ({ ...prev, [authorId]: false }));
+    }
+  };
+
   /** 打开评论 */
   const handleOpenComments = async (postId: string) => {
     setSelectedPostId(postId);
     setShowComments(true);
     setLoadingComments(true);
     try {
+      // #region debug-point B:open-comments
+      void __dbgReport__({
+        evt: "community.comments.open",
+        postId,
+      });
+      // #endregion
       const data = await postsApi.getComments(postId);
+      // #region debug-point B:open-comments-result
+      void __dbgReport__({
+        evt: "community.comments.result",
+        postId,
+        count: Array.isArray(data?.comments) ? data.comments.length : 0,
+      });
+      // #endregion
       setComments(data.comments || []);
     } catch (e) {
+      // #region debug-point B:open-comments-error
+      void __dbgReport__({
+        evt: "community.comments.error",
+        postId,
+      });
+      // #endregion
       setComments([]);
     } finally {
       setLoadingComments(false);
@@ -334,8 +498,23 @@ export default function CommunityPage() {
     if (!newComment.trim() || !selectedPostId) return;
     try {
       await ensureCommunitySession();
+      // #region debug-point B:submit-comment-begin
+      void __dbgReport__({
+        evt: "community.comment.begin",
+        postId: selectedPostId,
+        contentLength: newComment.trim().length,
+      });
+      // #endregion
       const data = await postsApi.addComment(selectedPostId, newComment.trim());
       const nextComment = data?.comment || (data?.id ? data : null);
+      // #region debug-point B:submit-comment-result
+      void __dbgReport__({
+        evt: "community.comment.result",
+        postId: selectedPostId,
+        hasComment: Boolean(nextComment),
+        keys: data && typeof data === "object" ? Object.keys(data) : [],
+      });
+      // #endregion
       if (nextComment) {
         setComments(prev => [nextComment, ...prev]);
         // 更新帖子评论数
@@ -344,15 +523,20 @@ export default function CommunityPage() {
         ));
         setNewComment("");
         toast.success("评论已发布");
-        try {
-          await userApi.recordAction('comment');
-        } catch (recordError) {
+        void userApi.recordAction('comment').catch((recordError) => {
           console.warn("[社区] 评论积分记录失败:", recordError);
-        }
+        });
         return;
       }
       throw new Error("评论返回结果异常");
     } catch (e: any) {
+      // #region debug-point B:submit-comment-error
+      void __dbgReport__({
+        evt: "community.comment.error",
+        postId: selectedPostId,
+        message: e?.message ?? String(e),
+      });
+      // #endregion
       if (e.message?.includes("登录") || e.message?.includes("认证")) {
         toast.error("请先登录后再评论");
       } else {
@@ -400,7 +584,8 @@ export default function CommunityPage() {
       let userName = "我";
       let userAvatar = "";
       try {
-        const session = await ensureCommunitySession();
+        await ensureCommunitySession();
+        const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } } as any));
         userName = session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || "我";
         userAvatar = session?.user?.user_metadata?.avatar_url || "";
       } catch (e) {
@@ -430,7 +615,7 @@ export default function CommunityPage() {
           setNewPostImages([]);
           setShowNewPost(false);
           toast.success(text("发布成功", "Posted"));
-          try { await userApi.recordAction('post'); } catch (e) { /* ignore */ }
+          void userApi.recordAction('post');
           return;
         }
       } catch (serverErr: any) {
@@ -504,6 +689,10 @@ export default function CommunityPage() {
               errorText={recommendedError}
               onRetry={() => void fetchPosts("recommended")}
               emptyText={text("暂无内容", "No posts yet")}
+              currentUserId={currentUserId}
+              followingByAuthor={followingByAuthor}
+              followBusyByAuthor={followBusyByAuthor}
+              onToggleFollow={handleToggleFollow}
             />
           </TabsContent>
           <TabsContent value="following" className="mt-0">
@@ -516,6 +705,10 @@ export default function CommunityPage() {
               errorText={followingError}
               onRetry={() => void fetchPosts("following")}
               emptyText={text("暂时还没有关注动态", "No following feed yet")}
+              currentUserId={currentUserId}
+              followingByAuthor={followingByAuthor}
+              followBusyByAuthor={followBusyByAuthor}
+              onToggleFollow={handleToggleFollow}
             />
           </TabsContent>
           <TabsContent value="bookmarks" className="mt-0">
@@ -528,6 +721,10 @@ export default function CommunityPage() {
               errorText={bookmarksError}
               onRetry={() => void fetchBookmarks()}
               emptyText={text("暂无收藏内容", "No saved posts")}
+              currentUserId={currentUserId}
+              followingByAuthor={followingByAuthor}
+              followBusyByAuthor={followBusyByAuthor}
+              onToggleFollow={handleToggleFollow}
             />
           </TabsContent>
         </div>
@@ -664,7 +861,20 @@ export default function CommunityPage() {
   );
 }
 
-function PostList({ posts, onLike, onBookmark, onComment, isLoading, emptyText, errorText, onRetry }: {
+function PostList({
+  posts,
+  onLike,
+  onBookmark,
+  onComment,
+  isLoading,
+  emptyText,
+  errorText,
+  onRetry,
+  currentUserId,
+  followingByAuthor,
+  followBusyByAuthor,
+  onToggleFollow,
+}: {
   posts: Post[];
   onLike: (id: string) => void;
   onBookmark: (id: string) => void;
@@ -673,6 +883,10 @@ function PostList({ posts, onLike, onBookmark, onComment, isLoading, emptyText, 
   emptyText?: string;
   errorText?: string | null;
   onRetry?: () => void;
+  currentUserId?: string | null;
+  followingByAuthor: Record<string, boolean>;
+  followBusyByAuthor: Record<string, boolean>;
+  onToggleFollow: (authorId: string) => void;
 }) {
   if (posts.length === 0 && emptyText && emptyText.trim() === "") {
     emptyText = undefined;
@@ -742,22 +956,38 @@ function PostList({ posts, onLike, onBookmark, onComment, isLoading, emptyText, 
   return (
       <div className="space-y-3 pt-1">
       {posts.map(post => (
-        <PostCard key={post.id} post={post} onLike={onLike} onBookmark={onBookmark} onComment={onComment} />
+        <PostCard
+          key={post.id}
+          post={post}
+          onLike={onLike}
+          onBookmark={onBookmark}
+          onComment={onComment}
+          currentUserId={currentUserId}
+          isFollowingAuthor={Boolean(followingByAuthor[getPostAuthorId(post)])}
+          followBusy={Boolean(followBusyByAuthor[getPostAuthorId(post)])}
+          onToggleFollow={onToggleFollow}
+        />
       ))}
     </div>
   );
 }
 
 /** 单条帖子卡片 */
-function PostCard({ post, onLike, onBookmark, onComment }: {
+function PostCard({ post, onLike, onBookmark, onComment, currentUserId, isFollowingAuthor, followBusy, onToggleFollow }: {
   post: Post;
   onLike: (id: string) => void;
   onBookmark: (id: string) => void;
   onComment: (id: string) => void;
+  currentUserId?: string | null;
+  isFollowingAuthor: boolean;
+  followBusy: boolean;
+  onToggleFollow: (authorId: string) => void;
 }) {
   const author = typeof post.author === 'string' 
     ? { name: post.author, avatar: '', verified: false } 
     : (post.author || { name: '匿名', avatar: '', verified: false });
+  const authorId = getPostAuthorId(post);
+  const canFollow = Boolean(authorId && authorId !== currentUserId);
 
   return (
     <motion.div
@@ -773,7 +1003,7 @@ function PostCard({ post, onLike, onBookmark, onComment }: {
             {author.name?.[0] || '?'}
           </AvatarFallback>
         </Avatar>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
             <span className="font-medium text-[var(--md-sys-typescale-title-medium-size)] text-[var(--md-sys-color-on-surface)]">{author.name}</span>
             {author.verified && (
@@ -786,6 +1016,22 @@ function PostCard({ post, onLike, onBookmark, onComment }: {
           </div>
           <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{post.timeAgo}</span>
         </div>
+        {canFollow && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={followBusy}
+            onClick={() => onToggleFollow(authorId)}
+            className={`h-8 shrink-0 rounded-full px-3 text-[12px] font-medium transition-all ${
+              isFollowingAuthor
+                ? "bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]"
+                : "bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[var(--md-sys-color-primary)]/90"
+            }`}
+          >
+            {isFollowingAuthor ? <UserCheck className="mr-1 h-3.5 w-3.5" /> : <UserPlus className="mr-1 h-3.5 w-3.5" />}
+            {isFollowingAuthor ? "已关注" : "关注"}
+          </Button>
+        )}
       </div>
 
       {/* 内容 */}

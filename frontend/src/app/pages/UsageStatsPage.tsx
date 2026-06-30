@@ -7,7 +7,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Clock, Calendar, Activity, Zap } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { userApi } from "../lib/api";
+import { supabase } from "../lib/supabase";
+import { syncAuthToken, userApi } from "../lib/api";
 import { useLanguage } from "../contexts/LanguageContext";
 
 interface DailyStatItem {
@@ -30,10 +31,14 @@ export default function UsageStatsPage() {
     totalTranslations: 0, totalOcr: 0, totalSoundDetections: 0
   });
   const [dailyStats, setDailyStats] = useState<DailyStatItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
+      setLoading(true);
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        syncAuthToken(session?.access_token ?? null);
         const [statsData, dailyData] = await Promise.all([
           userApi.getStats(),
           userApi.getDailyStats(7),
@@ -47,6 +52,8 @@ export default function UsageStatsPage() {
       } catch (e) {
         console.warn("[使用统计] 获取数据失败(可能未登录):", e);
         setDailyStats([]);
+      } finally {
+        setLoading(false);
       }
     };
     fetchStats();
@@ -56,10 +63,10 @@ export default function UsageStatsPage() {
   const maxDailyCount = Math.max(...dailyStats.map((item) => item.count), 1);
 
   const displayStats = [
-    { label: text("累计使用天数", "Days Used"), value: String(stats.days || 0), unit: text("天", "d"), icon: Calendar, color: "text-blue-500", bg: "bg-blue-50" },
-    { label: text("连续打卡", "Streak"), value: String(stats.loginStreak || 0), unit: text("天", "d"), icon: Zap, color: "text-orange-500", bg: "bg-orange-50" },
-    { label: text("累计翻译次数", "Translations"), value: String(stats.totalTranslations || 0), unit: text("次", ""), icon: Activity, color: "text-purple-500", bg: "bg-purple-50" },
-    { label: text("声音检测次数", "Sound Alerts"), value: String(stats.totalSoundDetections || 0), unit: text("次", ""), icon: Clock, color: "text-green-500", bg: "bg-green-50" },
+    { label: text("累计使用天数", "Days Used"), value: loading ? "--" : String(stats.days || 0), unit: text("天", "d"), icon: Calendar, color: "text-blue-500", bg: "bg-blue-50" },
+    { label: text("连续打卡", "Streak"), value: loading ? "--" : String(stats.loginStreak || 0), unit: text("天", "d"), icon: Zap, color: "text-orange-500", bg: "bg-orange-50" },
+    { label: text("累计翻译次数", "Translations"), value: loading ? "--" : String(stats.totalTranslations || 0), unit: text("次", ""), icon: Activity, color: "text-purple-500", bg: "bg-purple-50" },
+    { label: text("声音检测次数", "Sound Alerts"), value: loading ? "--" : String(stats.totalSoundDetections || 0), unit: text("次", ""), icon: Clock, color: "text-green-500", bg: "bg-green-50" },
   ];
 
   return (
@@ -90,7 +97,7 @@ export default function UsageStatsPage() {
             </div>
             <div className="rounded-[20px] border border-white/70 bg-white/72 px-4 py-3 text-right">
               <p className="text-[11px] text-slate-400">{text("累计积分", "Points")}</p>
-              <p className="mt-1 text-[20px] font-bold text-slate-900">{stats.points || 0}</p>
+              <p className="mt-1 text-[20px] font-bold text-slate-900">{loading ? "--" : stats.points || 0}</p>
             </div>
           </div>
         </div>

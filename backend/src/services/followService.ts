@@ -48,6 +48,21 @@ export async function isFollowing(followerId: string, followingId: string) {
   return !!record
 }
 
+export async function getFollowingStatus(followerId: string, followingIds: string[]) {
+  const uniqueIds = [...new Set(followingIds.filter((id) => id && id !== followerId))]
+  if (uniqueIds.length === 0) return new Set<string>()
+
+  const records = await prisma.follow.findMany({
+    where: {
+      followerId,
+      followingId: { in: uniqueIds },
+    },
+    select: { followingId: true },
+  })
+
+  return new Set(records.map((item) => item.followingId))
+}
+
 export async function getFollowingList(userId: string, limit = 20, offset = 0) {
   return prisma.follow.findMany({
     where: { followerId: userId },

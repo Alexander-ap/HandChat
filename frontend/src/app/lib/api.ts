@@ -12,16 +12,17 @@ import { supabase } from './supabase';
 
 /** API 基础地址 */
 const EDGE_FUNCTION_BASE = `https://${projectId}.supabase.co/functions/v1/api`;
+const EDGE_SERVER_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-481f4acb`;
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").trim() || (
   import.meta.env.DEV
     ? `http://localhost:54321/functions/v1/api` // 本地开发时指向本地 Supabase Edge Function
     : EDGE_FUNCTION_BASE
 );
-const EDGE_ONLY_BASE = (import.meta.env.VITE_EDGE_API_BASE_URL || "").trim() || EDGE_FUNCTION_BASE;
+const EDGE_ONLY_BASE = (import.meta.env.VITE_EDGE_API_BASE_URL || "").trim() || EDGE_SERVER_BASE;
 
-//#region debug-point follow-auth-after-login
+//#region debug-point A:api-request-flow
 const __ENABLE_DEBUG_REPORT__ = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEBUG_TELEMETRY === "true";
-const __DBG_URL__ = "http://127.0.0.1:3939/log";
+const __DBG_URL__ = "http://127.0.0.1:7777/event";
 async function __dbgReport__(payload: Record<string, any>) {
   if (!__ENABLE_DEBUG_REPORT__) return;
   try {
@@ -29,7 +30,12 @@ async function __dbgReport__(payload: Record<string, any>) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sessionId: "follow-auth-after-login",
+        sessionId: "web-smoke-check",
+        runId: "pre-fix",
+        hypothesisId: "A",
+        location: "frontend/src/app/lib/api.ts",
+        msg: "[DEBUG] API request flow",
+        ts: Date.now(),
         src: "frontend",
         ...payload,
       }),
@@ -70,7 +76,7 @@ function __dbgJwtMeta__(token: string | null) {
     iss: json.iss,
   };
 }
-//#endregion debug-point follow-auth-after-login
+//#endregion
 
 // ============================================================
 // 基础工具函数
@@ -222,6 +228,12 @@ export async function getCurrentAuthToken(): Promise<string | null> {
   return getAuthToken();
 }
 
+export async function getCurrentAuthUserId(): Promise<string | null> {
+  const token = await getAuthToken();
+  const payload = readJwtPayload(token);
+  return typeof payload?.sub === "string" ? payload.sub : null;
+}
+
 /**
  * 通用 API 请求函数
  * 
@@ -231,27 +243,28 @@ export async function getCurrentAuthToken(): Promise<string | null> {
  */
 async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth = true) {
   let token = await getAuthToken();
-  //#region debug-point follow-auth-after-login
+  //#region debug-point A:api-call-begin
   void __dbgReport__({
     evt: "apiCall.begin",
     endpoint,
     requireAuth,
+    apiBase: API_BASE,
     tokenMeta: __dbgJwtMeta__(token),
   });
-  //#endregion debug-point follow-auth-after-login
+  //#endregion
   
   // requireAuth=true 但无 token → 抛错
   if (requireAuth && !token) {
     // try one more time to recover session from local storage before throwing error
     const { data: { session } } = await supabase.auth.getSession();
-    //#region debug-point follow-auth-after-login
+    //#region debug-point A:api-call-no-token
     void __dbgReport__({
       evt: "apiCall.noToken.regetSession",
       endpoint,
       hasSession: Boolean(session),
       tokenMeta: __dbgJwtMeta__(session?.access_token ?? null),
     });
-    //#endregion debug-point follow-auth-after-login
+    //#endregion
     if (session?.access_token) {
       cachedAuthToken = session.access_token;
       token = session.access_token;
@@ -275,13 +288,17 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
   const buildHeaders = (t: string | null): HeadersInit => {
     const alg = getJwtAlg(t);
     const useSupabaseEdgeWorkaround = Boolean(t) && alg === "ES256";
-    return {
-      "Content-Type": "application/json",
-      Authorization: useSupabaseEdgeWorkaround ? `Bearer ${publicAnonKey}` : t ? `Bearer ${t}` : `Bearer ${publicAnonKey}`,
-      apikey: publicAnonKey,
-      ...(useSupabaseEdgeWorkaround ? { "x-user-jwt": t } : {}),
-      ...options.headers,
-    };
+    const headers = new Headers(options.headers);
+    headers.set("Content-Type", "application/json");
+    headers.set(
+      "Authorization",
+      useSupabaseEdgeWorkaround ? `Bearer ${publicAnonKey}` : t ? `Bearer ${t}` : `Bearer ${publicAnonKey}`
+    );
+    headers.set("apikey", publicAnonKey);
+    if (useSupabaseEdgeWorkaround && t) {
+      headers.set("x-user-jwt", t);
+    }
+    return headers;
   };
 
   let response: Response;
@@ -293,23 +310,25 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
       signal: options.signal ?? controller.signal,
       headers: buildHeaders(token),
     });
-    //#region debug-point follow-auth-after-login
+    //#region debug-point A:api-call-response
     void __dbgReport__({
       evt: "apiCall.response",
       endpoint,
       requireAuth,
       status: response.status,
+      ok: response.ok,
     });
-    //#endregion debug-point follow-auth-after-login
+    //#endregion
   } catch (networkError: any) {
     console.warn('[API] 网络请求失败:', endpoint, networkError);
-    //#region debug-point follow-auth-after-login
+    //#region debug-point A:api-call-network-error
     void __dbgReport__({
       evt: "apiCall.networkError",
       endpoint,
+      apiBase: API_BASE,
       message: networkError?.message ?? String(networkError),
     });
-    //#endregion debug-point follow-auth-after-login
+    //#endregion
     if (networkError?.name === 'AbortError') {
       throw new Error('请求超时，请稍后重试');
     }
@@ -320,7 +339,7 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
 
   // ── 401 自动重试逻辑 ──
   if (response.status === 401) {
-    //#region debug-point follow-auth-after-login
+    //#region debug-point A:api-call-401
     let body: any = null;
     try {
       body = await response.clone().json();
@@ -330,9 +349,10 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
       endpoint,
       requireAuth,
       body,
+      apiBase: API_BASE,
       tokenMeta: __dbgJwtMeta__(token),
     });
-    //#endregion debug-point follow-auth-after-login
+    //#endregion
     // 尝试刷新 token 后重试一次
     try {
       const { data: { session: refreshed } } = await supabase.auth.refreshSession();
@@ -342,27 +362,27 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
           ...options,
           headers: buildHeaders(token),
         });
-        //#region debug-point follow-auth-after-login
+        //#region debug-point A:api-call-401-retry
         void __dbgReport__({
           evt: "apiCall.401.retryResponse",
           endpoint,
           status: retryResponse.status,
           tokenMeta: __dbgJwtMeta__(token),
         });
-        //#endregion debug-point follow-auth-after-login
+        //#endregion
         if (retryResponse.ok) {
           return parseResponseBody(retryResponse);
         }
       }
     } catch (e) {
       // 刷新失败
-      //#region debug-point follow-auth-after-login
+      //#region debug-point A:api-call-refresh-error
       void __dbgReport__({
         evt: "apiCall.401.refresh.error",
         endpoint,
         message: (e as any)?.message ?? String(e),
       });
-      //#endregion debug-point follow-auth-after-login
+      //#endregion
     }
 
     // requireAuth=false 时用 anon key 做最后尝试
@@ -379,12 +399,12 @@ async function apiCall(endpoint: string, options: RequestInit = {}, requireAuth 
     // 所有重试都失败
     if (requireAuth) {
       cachedAuthToken = null;
-      //#region debug-point follow-auth-after-login
+      //#region debug-point A:api-call-401-final
       void __dbgReport__({
         evt: "apiCall.401.finalFail",
         endpoint,
       });
-      //#endregion debug-point follow-auth-after-login
+      //#endregion
       throw new Error('认证失败，请重新登录');
     }
     // 非必须认证 → 返回空结果而非抛错
@@ -444,22 +464,7 @@ export const userApi = {
 
   /** 获取用户统计数据 — 失败静默降级 */
   async getStats() {
-    try {
-      return await apiCall('/user/stats');
-    } catch (e) {
-      console.warn('[统计] 获取失败，使用默认值');
-      return {
-        stats: {
-          days: 1, // 如果获取不到，默认为 1 天而不是 7 天
-          points: 0,
-          achievements: 0,
-          loginStreak: 1,
-          totalTranslations: 0,
-          totalOcr: 0,
-          totalSoundDetections: 0,
-        }
-      };
-    }
+    return apiCall('/user/stats');
   },
 
   async getSettings() {
@@ -490,12 +495,24 @@ export const userApi = {
     return apiCall(`/user/bookmarks?limit=${limit}&offset=${offset}`)
   },
 
+  async getMyPosts(limit = 50, offset = 0) {
+    const response = await apiCall(`/user/posts?limit=${limit}&offset=${offset}`)
+    if (Array.isArray(response?.posts)) {
+      return { ...response, posts: response.posts.map(normalizePost) }
+    }
+    return { posts: [] }
+  },
+
+  async getMyComments(limit = 50, offset = 0) {
+    return apiCall(`/user/comments?limit=${limit}&offset=${offset}`)
+  },
+
   /** 获取积分明细列表 */
   async getPointsHistory() {
     try {
-      return await apiCall('/user/points');
+      return await apiCall('/points/history');
     } catch (e) {
-      return { points: [] };
+      return { records: [] };
     }
   },
 
@@ -538,6 +555,12 @@ export const followApi = {
 
   async isFollowing(userId: string) {
     return apiCall(`/user/${userId}/is-following`)
+  },
+
+  async getFollowingStatus(userIds: string[]) {
+    const ids = [...new Set(userIds.filter(Boolean))].slice(0, 100)
+    if (ids.length === 0) return { following: {} as Record<string, boolean> }
+    return apiCall(`/user/following/status?ids=${encodeURIComponent(ids.join(','))}`)
   },
 
   async getFollowers(userId: string) {
@@ -721,6 +744,12 @@ export const postsApi = {
       return { success: true, comment: normalizeComment(response) };
     }
     return response;
+  },
+
+  async deleteComment(postId: string, commentId: string) {
+    return apiCall(`/posts/${postId}/comments/${commentId}`, {
+      method: 'DELETE',
+    });
   },
 
   /** 获取帖子评论列表 */

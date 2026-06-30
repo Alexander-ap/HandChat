@@ -6,8 +6,11 @@ import SignLanguageHistoryPage from "./pages/SignLanguageHistoryPage";
 import SignLanguageSessionDetailPage from "./pages/SignLanguageSessionDetailPage";
 import SoundDetectionPage from "./pages/SoundDetectionPage";
 import CommunityPage from "./pages/CommunityPage";
+import PostDetailPage from "./pages/PostDetailPage";
 import ProfilePage from "./pages/ProfilePage";
 import FollowListPage from "./pages/FollowListPage";
+import MyPostsPage from "./pages/MyPostsPage";
+import MyCommentsPage from "./pages/MyCommentsPage";
 import LoginPage from "./pages/LoginPage";
 import EditProfilePage from "./pages/EditProfilePage";
 import HelpCenterPage from "./pages/HelpCenterPage";
@@ -31,8 +34,11 @@ export const router = createBrowserRouter([
       { path: "sign-language", Component: SignLanguagePage },
       { path: "sound", Component: SoundDetectionPage },
       { path: "community", Component: CommunityPage },
+      { path: "community/post/:postId", Component: PostDetailPage },
       { path: "profile", Component: ProfilePage },
       { path: "profile/follow", Component: FollowListPage },
+      { path: "profile/posts", Component: MyPostsPage },
+      { path: "profile/comments", Component: MyCommentsPage },
       { path: "profile/edit", Component: EditProfilePage },
       { path: "help", Component: HelpCenterPage },
       { path: "privacy", Component: PrivacySettingsPage },

@@ -135,6 +135,17 @@ export default function PostDetailPage() {
     };
   }, [postId]);
 
+  useEffect(() => {
+    if (isLoading || !location.hash) return;
+    const target = document.querySelector(location.hash);
+    if (!target) return;
+    window.setTimeout(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.classList.add("ring-2", "ring-blue-300");
+      window.setTimeout(() => target.classList.remove("ring-2", "ring-blue-300"), 1800);
+    }, 120);
+  }, [comments.length, isLoading, location.hash]);
+
   return (
     <div className="min-h-screen pb-24" style={{ background: "var(--app-background, #F2F2F7)" }}>
       <div className="bg-white/80 backdrop-blur-xl px-4 pt-12 pb-3 shadow-sm sticky top-0 z-50 border-b border-black/[0.04]">
@@ -242,7 +253,7 @@ export default function PostDetailPage() {
               ) : (
                 <div className="space-y-4">
                   {comments.map((comment) => (
-                    <div key={comment.id} className="rounded-[16px] bg-slate-50 px-4 py-3">
+                    <div id={`comment-${comment.id}`} key={comment.id} className="scroll-mt-24 rounded-[16px] bg-slate-50 px-4 py-3 transition-shadow">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-[14px] font-medium text-slate-900 truncate">{comment.authorName}</p>
                         <span className="text-[12px] text-slate-400 flex-shrink-0">{comment.timeAgo}</span>

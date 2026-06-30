@@ -1,5 +1,28 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
+// #region debug-point C:theme-state
+const __DBG_URL__ = "http://127.0.0.1:7777/event";
+async function __dbgReport__(payload: Record<string, unknown>) {
+  if (!(import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEBUG_TELEMETRY === "true")) return;
+  try {
+    await fetch(__DBG_URL__, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "web-smoke-check",
+        runId: "pre-fix",
+        hypothesisId: "C",
+        location: "frontend/src/app/contexts/ThemeContext.tsx",
+        msg: "[DEBUG] Theme state",
+        ts: Date.now(),
+        src: "frontend",
+        ...payload,
+      }),
+    });
+  } catch (_) {}
+}
+// #endregion
+
 export interface Theme {
   id: string;
   name: string;
@@ -56,6 +79,12 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
     const savedThemeId = localStorage.getItem('appTheme');
+    // #region debug-point C:theme-init
+    void __dbgReport__({
+      evt: "theme.init",
+      savedThemeId,
+    });
+    // #endregion
     // 默认使用白色主题
     return themes.find(t => t.id === savedThemeId) || themes.find(t => t.id === 'light') || themes[0];
   });
@@ -63,6 +92,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setTheme = (themeId: string) => {
     const theme = themes.find(t => t.id === themeId);
     if (theme) {
+      // #region debug-point C:theme-set
+      void __dbgReport__({
+        evt: "theme.set",
+        nextThemeId: themeId,
+        previousThemeId: currentTheme.id,
+      });
+      // #endregion
       setCurrentTheme(theme);
       localStorage.setItem('appTheme', themeId);
     }
@@ -70,6 +106,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.style.setProperty('--app-background', currentTheme.background);
+    // #region debug-point C:theme-apply
+    void __dbgReport__({
+      evt: "theme.apply",
+      currentThemeId: currentTheme.id,
+      appBackground: document.documentElement.style.getPropertyValue('--app-background'),
+      bodyBackground: document.body.style.background,
+    });
+    // #endregion
   }, [currentTheme]);
 
   return (
